@@ -68,7 +68,15 @@ namespace TUFX
         {
             try
             {
-                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, "TUFX: Beyond".Localize());
+                string title = "TUFX: Beyond";
+                try
+                {
+                    title = title.Localize();
+                }
+                catch
+                {
+                }
+                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, title);
             }
             catch (Exception e)
             {
