@@ -1,4 +1,4 @@
-﻿using KSP.UI.Screens;
+using KSP.UI.Screens;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -205,6 +205,34 @@ namespace TUFX
             catch(Exception e)
             {
                 Log.debug(e.ToString());
+            }
+
+            // Load advanced shaders bundle if available
+            try
+            {
+                string advBundlePath = KSPUtil.ApplicationRootPath + "GameData/TUFX/Shaders/tufx-advanced.ssf";
+                if (System.IO.File.Exists(advBundlePath))
+                {
+                    bundle = AssetBundle.LoadFromFile(advBundlePath);
+                    if (bundle != null)
+                    {
+                        shaders = bundle.LoadAllAssets<Shader>();
+                        len = shaders.Length;
+                        for (int i = 0; i < len; i++)
+                        {
+                            if (!this.shaders.ContainsKey(shaders[i].name))
+                            {
+                                this.shaders.Add(shaders[i].name, shaders[i]);
+                                Log.debug("Loading advanced shader: " + shaders[i].name);
+                            }
+                        }
+                        bundle.Unload(false);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.exception("Exception loading tufx-advanced.ssf: " + e.ToString());
             }
 
             #region REGION - Load standard Post Process Effect Shaders

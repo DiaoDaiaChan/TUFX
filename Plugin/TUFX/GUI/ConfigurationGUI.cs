@@ -1,4 +1,4 @@
-﻿using ClickThroughFix;
+using ClickThroughFix;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -222,16 +222,26 @@ namespace TUFX
             editScrollPos = GUILayout.BeginScrollView(editScrollPos, false, true, (GUILayoutOption[])null);
             renderGeneralSettings();
             renderAmbientOcclusionSettings();
+            renderGTAOSettings();
+            renderContactShadowsSettings();
             renderAutoExposureSettings();
             renderBloomSettings();
+            renderHalationSettings();
+            renderAnamorphicFlareSettings();
+            renderGodRaysSettings();
             renderChromaticAberrationSettings();
             renderColorGradingSettings();
+            renderModernTonemappingSettings();
             renderDepthOfFieldSettings();
+            renderSpectralBokehSettings();
             renderGrainSettings();
             renderLensDistortionSettings();
             renderMotionBlurSettings();
+            renderScreenSpaceReflectionsSettings();
+            renderHeatDistortionSettings();
             renderScatteringSettings();
             renderVignetteSettings();
+            renderCASSettings();
             GUILayout.EndScrollView();
         }
 
@@ -544,6 +554,146 @@ namespace TUFX
                 AddBoolParameter("Rounded", vg.rounded);
                 AddTextureParameter("Mask", vg.mask, BuiltinEffect.Vignette.ToString(), "Mask");
                 AddFloatParameter("Opacity", vg.opacity, 0, 1);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderCASSettings()
+        {
+            bool showProps = AddEffectHeader("Contrast Adaptive Sharpening (CAS)", out ContrastAdaptiveSharpening cas);
+            if (showProps)
+            {
+                AddFloatParameter("Sharpness", cas.sharpness, 0f, 1f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderModernTonemappingSettings()
+        {
+            bool showProps = AddEffectHeader("Modern Tonemapping (AgX / Tony / Filmic)", out ModernTonemapping mt);
+            if (showProps)
+            {
+                AddEnumParameter("Tonemapper", mt.tonemapper);
+                AddFloatParameter("Exposure", mt.exposure, 0.05f, 5f);
+                AddFloatParameter("Saturation", mt.saturation, 0f, 2f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderHalationSettings()
+        {
+            bool showProps = AddEffectHeader("Halation (Film Bleed)", out Halation h);
+            if (showProps)
+            {
+                AddFloatParameter("Intensity", h.intensity, 0f, 5f);
+                AddFloatParameter("Threshold", h.threshold, 0.1f, 10f);
+                AddFloatParameter("Radius", h.radius, 0.5f, 10f);
+                AddColorParameter("Color Tint", h.colorTint);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderAnamorphicFlareSettings()
+        {
+            bool showProps = AddEffectHeader("Anamorphic Flare & Starburst", out AnamorphicFlare af);
+            if (showProps)
+            {
+                AddFloatParameter("Streak Intensity", af.streakIntensity, 0f, 5f);
+                AddFloatParameter("Streak Length", af.streakLength, 0.5f, 10f);
+                AddColorParameter("Streak Color", af.streakColor);
+                AddFloatParameter("Spike Intensity", af.spikeIntensity, 0f, 5f);
+                AddIntParameter("Spike Count", af.spikeCount, 4, 8);
+                AddFloatParameter("Spike Length", af.spikeLength, 0.5f, 10f);
+                AddFloatParameter("Threshold", af.threshold, 0.5f, 15f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderGTAOSettings()
+        {
+            bool showProps = AddEffectHeader("Ground Truth AO (GTAO)", out GroundTruthAO gtao);
+            if (showProps)
+            {
+                AddFloatParameter("Radius", gtao.radius, 0.05f, 5f);
+                AddFloatParameter("Intensity", gtao.intensity, 0f, 4f);
+                AddFloatParameter("Thickness", gtao.thickness, 0.1f, 5f);
+                AddFloatParameter("Multi-Bounce", gtao.multiBounce, 0f, 1f);
+                AddColorParameter("Color", gtao.color);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderContactShadowsSettings()
+        {
+            bool showProps = AddEffectHeader("Contact Shadows", out ContactShadows cs);
+            if (showProps)
+            {
+                AddFloatParameter("Ray Length", cs.rayLength, 0.01f, 1f);
+                AddIntParameter("Steps", cs.raySteps, 4, 16);
+                AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
+                AddFloatParameter("Thickness", cs.thickness, 0.005f, 0.1f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderGodRaysSettings()
+        {
+            bool showProps = AddEffectHeader("God Rays (Crepuscular Rays)", out GodRays gr);
+            if (showProps)
+            {
+                AddFloatParameter("Intensity", gr.intensity, 0f, 5f);
+                AddFloatParameter("Density", gr.density, 0.1f, 2f);
+                AddFloatParameter("Decay", gr.decay, 0.8f, 0.99f);
+                AddFloatParameter("Weight", gr.weight, 0.05f, 1f);
+                AddColorParameter("Ray Color", gr.rayColor);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderSpectralBokehSettings()
+        {
+            bool showProps = AddEffectHeader("Spectral Bokeh (Chromatic DoF)", out SpectralBokeh sb);
+            if (showProps)
+            {
+                AddFloatParameter("Focus Distance", sb.focusDistance, 0.1f, 200f);
+                AddFloatParameter("Focal Length", sb.focalLength, 10f, 200f);
+                AddFloatParameter("Dispersion", sb.dispersionStrength, 0f, 2f);
+                AddFloatParameter("Max Bokeh Radius", sb.maxBokehRadius, 1f, 20f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderScreenSpaceReflectionsSettings()
+        {
+            bool showProps = AddEffectHeader("Screen Space Reflections (SSR)", out ScreenSpaceReflections ssr);
+            if (showProps)
+            {
+                bool isDeferred = (Camera.main != null && Camera.main.actualRenderingPath == RenderingPath.DeferredShading);
+                if (!isDeferred)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Status: Forward Rendering (Requires Deferred mod for full SSR)", GUILayout.Width(450));
+                    GUILayout.EndHorizontal();
+                }
+                AddEnumParameter("Preset", ssr.preset);
+                AddIntParameter("Max Iterations", ssr.maximumIterationCount, 4, 128);
+                AddEnumParameter("Resolution", ssr.resolution);
+                AddFloatParameter("Thickness", ssr.thickness, 1f, 64f);
+                AddFloatParameter("Max March Dist", ssr.maximumMarchDistance, 10f, 500f);
+                AddFloatParameter("Distance Fade", ssr.distanceFade, 0f, 1f);
+                AddFloatParameter("Vignette", ssr.vignette, 0f, 1f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderHeatDistortionSettings()
+        {
+            bool showProps = AddEffectHeader("Heat Distortion", out HeatDistortionEffect hd);
+            if (showProps)
+            {
+                AddFloatParameter("Intensity", hd.intensity, 0f, 2f);
+                AddFloatParameter("Speed", hd.speed, 0.2f, 10f);
+                AddFloatParameter("Scale", hd.scale, 1f, 30f);
             }
             GUILayout.EndVertical();
         }

@@ -154,12 +154,24 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Load(ConfigNode config)
         {
-            //NOOP -- SSR not usable in KSP as it requires deferred rendering
+            loadEnumParameter(config, "Preset", preset, typeof(ScreenSpaceReflectionPreset));
+            loadIntParameter(config, "MaxIterationCount", maximumIterationCount);
+            loadEnumParameter(config, "Resolution", resolution, typeof(ScreenSpaceReflectionResolution));
+            loadFloatParameter(config, "Thickness", thickness);
+            loadFloatParameter(config, "MaxMarchDistance", maximumMarchDistance);
+            loadFloatParameter(config, "DistanceFade", distanceFade);
+            loadFloatParameter(config, "Vignette", vignette);
         }
 
         public override void Save(ConfigNode config)
         {
-            //NOOP -- SSR not usable in KSP as it requires deferred rendering
+            saveEnumParameter(config, "Preset", preset);
+            saveIntParameter(config, "MaxIterationCount", maximumIterationCount);
+            saveEnumParameter(config, "Resolution", resolution);
+            saveFloatParameter(config, "Thickness", thickness);
+            saveFloatParameter(config, "MaxMarchDistance", maximumMarchDistance);
+            saveFloatParameter(config, "DistanceFade", distanceFade);
+            saveFloatParameter(config, "Vignette", vignette);
         }
 
     }

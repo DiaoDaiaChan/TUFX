@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>TUFX</RootNamespace>
     <AssemblyName>TUFX</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
@@ -86,9 +86,19 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Addon\TexturesUnlimitedFXLoader.cs" />
+    <Compile Include="Addon\TUFXDynamicContextManager.cs" />
     <Compile Include="GUI\ConfigurationGUI.cs" />
     <Compile Include="GUI\DebugGUI.cs" />
     <Compile Include="GUI\SplineConfigurationGUI.cs" />
+    <Compile Include="PostProcessing\Effects\AnamorphicFlare.cs" />
+    <Compile Include="PostProcessing\Effects\ContactShadows.cs" />
+    <Compile Include="PostProcessing\Effects\ContrastAdaptiveSharpening.cs" />
+    <Compile Include="PostProcessing\Effects\GodRays.cs" />
+    <Compile Include="PostProcessing\Effects\GroundTruthAO.cs" />
+    <Compile Include="PostProcessing\Effects\Halation.cs" />
+    <Compile Include="PostProcessing\Effects\HeatDistortionEffect.cs" />
+    <Compile Include="PostProcessing\Effects\ModernTonemapping.cs" />
+    <Compile Include="PostProcessing\Effects\SpectralBokeh.cs" />
     <Compile Include="PostProcessing\Attributes\DisplayNameAttribute.cs" />
     <Compile Include="PostProcessing\Attributes\MaxAttribute.cs" />
     <Compile Include="PostProcessing\Attributes\MinAttribute.cs" />

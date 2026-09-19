@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -26,7 +26,17 @@ namespace TUFX
         LensDistortion,
         MotionBlur,
         Scattering,
-        Vignette
+        Vignette,
+        ContrastAdaptiveSharpening,
+        ModernTonemapping,
+        Halation,
+        AnamorphicFlare,
+        GroundTruthAO,
+        ContactShadows,
+        GodRays,
+        SpectralBokeh,
+        ScreenSpaceReflections,
+        HeatDistortion
     }
 
     public class TUFXProfileManager
@@ -58,6 +68,26 @@ namespace TUFX
                     return ScriptableObject.CreateInstance<TUBISEffect>();
                 case BuiltinEffect.Vignette:
                     return ScriptableObject.CreateInstance<Vignette>();
+                case BuiltinEffect.ContrastAdaptiveSharpening:
+                    return ScriptableObject.CreateInstance<ContrastAdaptiveSharpening>();
+                case BuiltinEffect.ModernTonemapping:
+                    return ScriptableObject.CreateInstance<ModernTonemapping>();
+                case BuiltinEffect.Halation:
+                    return ScriptableObject.CreateInstance<Halation>();
+                case BuiltinEffect.AnamorphicFlare:
+                    return ScriptableObject.CreateInstance<AnamorphicFlare>();
+                case BuiltinEffect.GroundTruthAO:
+                    return ScriptableObject.CreateInstance<GroundTruthAO>();
+                case BuiltinEffect.ContactShadows:
+                    return ScriptableObject.CreateInstance<ContactShadows>();
+                case BuiltinEffect.GodRays:
+                    return ScriptableObject.CreateInstance<GodRays>();
+                case BuiltinEffect.SpectralBokeh:
+                    return ScriptableObject.CreateInstance<SpectralBokeh>();
+                case BuiltinEffect.ScreenSpaceReflections:
+                    return ScriptableObject.CreateInstance<ScreenSpaceReflections>();
+                case BuiltinEffect.HeatDistortion:
+                    return ScriptableObject.CreateInstance<HeatDistortionEffect>();
                 default:
                     break;
             }
@@ -77,6 +107,16 @@ namespace TUFX
             else if (settings is MotionBlur) { return BuiltinEffect.MotionBlur; }
             else if (settings is TUBISEffect) { return BuiltinEffect.Scattering; }
             else if (settings is Vignette) { return BuiltinEffect.Vignette; }
+            else if (settings is ContrastAdaptiveSharpening) { return BuiltinEffect.ContrastAdaptiveSharpening; }
+            else if (settings is ModernTonemapping) { return BuiltinEffect.ModernTonemapping; }
+            else if (settings is Halation) { return BuiltinEffect.Halation; }
+            else if (settings is AnamorphicFlare) { return BuiltinEffect.AnamorphicFlare; }
+            else if (settings is GroundTruthAO) { return BuiltinEffect.GroundTruthAO; }
+            else if (settings is ContactShadows) { return BuiltinEffect.ContactShadows; }
+            else if (settings is GodRays) { return BuiltinEffect.GodRays; }
+            else if (settings is SpectralBokeh) { return BuiltinEffect.SpectralBokeh; }
+            else if (settings is ScreenSpaceReflections) { return BuiltinEffect.ScreenSpaceReflections; }
+            else if (settings is HeatDistortionEffect) { return BuiltinEffect.HeatDistortion; }
             return BuiltinEffect.AmbientOcclusion;
         }
 
