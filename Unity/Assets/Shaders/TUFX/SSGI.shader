@@ -126,6 +126,7 @@ Shader "Hidden/TUFX/SSGI"
             float stepSize = _RayLength / float(raySteps);
 
             float3 accumulatedLight = float3(0, 0, 0);
+            float accumulatedWeight = 0.0;
 
             [unroll(8)]
             for (int r = 0; r < 8; r++)
@@ -165,27 +166,29 @@ Shader "Hidden/TUFX/SSGI"
                         // Ray hit geometry! Sample irradiance from hit position
                         float3 hitColor = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 1.0).rgb;
 
-                        // Anti-Firefly Clamping: Indirect diffuse bounce cannot exceed 1.8 luminance.
-                        // Completely kills flickering specular white glints on rocket grids!
-                        hitColor = min(hitColor, 1.8);
-
                         // Edge fade and distance falloff
                         float2 edgeDist = abs(sampleUV - 0.5) * 2.0;
                         float edgeFade = saturate(1.0 - max(edgeDist.x, edgeDist.y));
                         float distFalloff = saturate(1.0 - t / _RayLength);
 
-                        accumulatedLight += hitColor * (edgeFade * distFalloff);
+                        // Karis Anti-Firefly Luminance Weighting:
+                        // Suppresses isolated specular hot spots and stipple noise on curved reflectors
+                        float hitLuma = dot(hitColor, float3(0.2126, 0.7152, 0.0722));
+                        float sampleWeight = 1.0 / (1.0 + hitLuma * 0.6);
+
+                        accumulatedLight += hitColor * (edgeFade * distFalloff * sampleWeight);
+                        accumulatedWeight += sampleWeight;
                         break;
                     }
                 }
             }
 
-            float3 indirect = accumulatedLight / max(1.0, float(rayCount));
+            float3 indirect = (accumulatedWeight > 0.001) ? (accumulatedLight / accumulatedWeight) : float3(0, 0, 0);
             return float4(saturate(indirect), 1.0);
         }
 
-        // Pass 1: Edge-Preserving Bilateral Denoise with Cross-Filter
-        float4 FragSSGIDenoise(VaryingsDefault i) : SV_Target
+        // Pass 1: Horizontal Edge-Preserving Bilateral Denoise (Wide 9-tap)
+        float4 FragSSGIDenoiseH(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
             #if UNITY_REVERSED_Z
@@ -197,39 +200,78 @@ Shader "Hidden/TUFX/SSGI"
             float centerDepth = LinearEyeDepth(rawDepth);
             float4 centerSample = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
 
-            float3 sum = centerSample.rgb;
-            float totalWeight = 1.0;
-            float2 texel = _MainTex_TexelSize.xy * 1.75;
+            static const float kernelOffsets[5] = { 0.0, 1.0, 2.0, 3.0, 4.0 };
+            static const float kernelWeights[5] = { 0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216 };
 
-            const float2 offsets[8] = {
-                float2( 1.0,  0.0), float2(-1.0,  0.0),
-                float2( 0.0,  1.0), float2( 0.0, -1.0),
-                float2( 0.7,  0.7), float2(-0.7,  0.7),
-                float2( 0.7, -0.7), float2(-0.7, -0.7)
-            };
+            float3 sum = centerSample.rgb * kernelWeights[0];
+            float totalWeight = kernelWeights[0];
+            float2 texel = float2(_MainTex_TexelSize.x * 2.5, 0.0);
 
             [unroll]
-            for (int k = 0; k < 8; k++)
+            for (int k = 1; k < 5; k++)
             {
-                float2 uv = i.texcoord + offsets[k] * texel;
-                float tapDepth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv));
-                float depthDiff = abs(centerDepth - tapDepth);
+                float2 uvL = i.texcoord - texel * kernelOffsets[k];
+                float2 uvR = i.texcoord + texel * kernelOffsets[k];
 
-                float weight = exp(-depthDiff / max(0.04, centerDepth * 0.03)) * (k < 4 ? 1.0 : 0.6);
-                float4 tapCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
+                float depthL = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvL));
+                float depthR = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvR));
 
-                sum += tapCol.rgb * weight;
-                totalWeight += weight;
+                float wL = kernelWeights[k] * exp(-abs(centerDepth - depthL) / max(0.04, centerDepth * 0.03));
+                float wR = kernelWeights[k] * exp(-abs(centerDepth - depthR) / max(0.04, centerDepth * 0.03));
+
+                sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvL).rgb * wL;
+                sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvR).rgb * wR;
+                totalWeight += (wL + wR);
             }
 
             return float4(sum / max(0.0001, totalWeight), 1.0);
         }
 
-        // Pass 2: Composite Indirect Light onto Scene
+        // Pass 2: Vertical Edge-Preserving Bilateral Denoise (Wide 9-tap)
+        float4 FragSSGIDenoiseV(VaryingsDefault i) : SV_Target
+        {
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
+            #if UNITY_REVERSED_Z
+                if (rawDepth <= 0.00005) return float4(0, 0, 0, 0);
+            #else
+                if (rawDepth >= 0.99995) return float4(0, 0, 0, 0);
+            #endif
+
+            float centerDepth = LinearEyeDepth(rawDepth);
+            float4 centerSample = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+
+            static const float kernelOffsets[5] = { 0.0, 1.0, 2.0, 3.0, 4.0 };
+            static const float kernelWeights[5] = { 0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216 };
+
+            float3 sum = centerSample.rgb * kernelWeights[0];
+            float totalWeight = kernelWeights[0];
+            float2 texel = float2(0.0, _MainTex_TexelSize.y * 2.5);
+
+            [unroll]
+            for (int k = 1; k < 5; k++)
+            {
+                float2 uvB = i.texcoord - texel * kernelOffsets[k];
+                float2 uvT = i.texcoord + texel * kernelOffsets[k];
+
+                float depthB = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvB));
+                float depthT = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvT));
+
+                float wB = kernelWeights[k] * exp(-abs(centerDepth - depthB) / max(0.04, centerDepth * 0.03));
+                float wT = kernelWeights[k] * exp(-abs(centerDepth - depthT) / max(0.04, centerDepth * 0.03));
+
+                sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvB).rgb * wB;
+                sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvT).rgb * wT;
+                totalWeight += (wB + wT);
+            }
+
+            return float4(sum / max(0.0001, totalWeight), 1.0);
+        }
+
+        // Pass 3: Composite Indirect Light onto Scene
         float4 FragSSGIComposite(VaryingsDefault i) : SV_Target
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float3 indirect = SAMPLE_TEXTURE2D(_SSGITex, sampler_SSGITex, i.texcoord).rgb;
+            float3 indirect = SAMPLE_TEXTURE2D(_SSGITex, sampler_MainTex, i.texcoord).rgb;
 
             if (any(isnan(indirect)) || any(isinf(indirect)))
             {
@@ -268,16 +310,25 @@ Shader "Hidden/TUFX/SSGI"
             ENDHLSL
         }
 
-        // 1: Denoise
+        // 1: Denoise Horizontal
         Pass
         {
             HLSLPROGRAM
                 #pragma vertex VertDefault
-                #pragma fragment FragSSGIDenoise
+                #pragma fragment FragSSGIDenoiseH
             ENDHLSL
         }
 
-        // 2: Composite
+        // 2: Denoise Vertical
+        Pass
+        {
+            HLSLPROGRAM
+                #pragma vertex VertDefault
+                #pragma fragment FragSSGIDenoiseV
+            ENDHLSL
+        }
+
+        // 3: Composite
         Pass
         {
             HLSLPROGRAM

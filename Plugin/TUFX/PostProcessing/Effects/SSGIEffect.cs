@@ -108,24 +108,30 @@ namespace UnityEngine.Rendering.PostProcessing
             int halfW = Mathf.Max(1, context.width / 2);
             int halfH = Mathf.Max(1, context.height / 2);
             int rtRawSSGI = Shader.PropertyToID("_SSGIRaw");
-            int rtDenoiseSSGI = Shader.PropertyToID("_SSGIDenoise");
+            int rtDenoiseSSGI_H = Shader.PropertyToID("_SSGIDenoise_H");
+            int rtDenoiseSSGI_V = Shader.PropertyToID("_SSGIDenoise_V");
 
             var cmd = context.command;
             cmd.GetTemporaryRT(rtRawSSGI, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
-            cmd.GetTemporaryRT(rtDenoiseSSGI, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
+            cmd.GetTemporaryRT(rtDenoiseSSGI_H, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
+            cmd.GetTemporaryRT(rtDenoiseSSGI_V, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
 
-            // Pass 0: Raymarching at half resolution
+            // Pass 0: Raymarching at half resolution with Karis anti-firefly weighting
             cmd.BlitFullscreenTriangle(context.source, rtRawSSGI, sheet, 0);
 
-            // Pass 1: Edge-preserving bilateral denoise
-            cmd.BlitFullscreenTriangle(rtRawSSGI, rtDenoiseSSGI, sheet, 1);
+            // Pass 1: Horizontal bilateral denoise (wide-band 9-tap)
+            cmd.BlitFullscreenTriangle(rtRawSSGI, rtDenoiseSSGI_H, sheet, 1);
 
-            // Pass 2: Composite onto scene color
-            cmd.SetGlobalTexture("_SSGITex", rtDenoiseSSGI);
-            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 2);
+            // Pass 2: Vertical bilateral denoise (wide-band 9-tap)
+            cmd.BlitFullscreenTriangle(rtDenoiseSSGI_H, rtDenoiseSSGI_V, sheet, 2);
+
+            // Pass 3: Composite onto scene color
+            cmd.SetGlobalTexture("_SSGITex", rtDenoiseSSGI_V);
+            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 3);
 
             cmd.ReleaseTemporaryRT(rtRawSSGI);
-            cmd.ReleaseTemporaryRT(rtDenoiseSSGI);
+            cmd.ReleaseTemporaryRT(rtDenoiseSSGI_H);
+            cmd.ReleaseTemporaryRT(rtDenoiseSSGI_V);
         }
     }
 }

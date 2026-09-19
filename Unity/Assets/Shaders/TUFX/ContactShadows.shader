@@ -72,9 +72,10 @@ Shader "Hidden/TUFX/ContactShadows"
 
             float3 rayDir = normalize(_LightDirView);
             float NdotL = dot(normal, rayDir);
+            float slopeFactor = saturate(1.0 - NdotL);
 
-            // Smooth transition at terminator: eliminates razor-sharp cutoff line on curved cylinders
-            float lightFacing = smoothstep(0.0, 0.20, NdotL);
+            // Smooth transition at terminator: eliminates razor-sharp cutoff line on curved cylinders & dishes
+            float lightFacing = smoothstep(-0.02, 0.25, NdotL);
             if (lightFacing <= 0.0001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
@@ -93,7 +94,7 @@ Shader "Hidden/TUFX/ContactShadows"
             float adaptiveRayLength = clamp(max(_RayLength, linearDepth * 0.003), 0.03, 0.25);
 
             // Generous normal bias to lift ray origin reliably above polygon facets of curved geometry
-            float normalBias = max(0.015, adaptiveThickness * 0.35);
+            float normalBias = max(0.02, adaptiveThickness * 0.40 + slopeFactor * 0.015);
             float3 originPos = centerPos + normal * normalBias;
 
             // March towards light source in view space
@@ -125,9 +126,8 @@ Shader "Hidden/TUFX/ContactShadows"
             float invZ_start = 1.0 / originPos.z;
             float invZ_end   = 1.0 / endPos.z;
 
-            // Slope-adaptive bias: prevents cylindrical polygon facets from self-shadowing into checkerboard squares
-            float slopeFactor = saturate(1.0 - NdotL);
-            float bias = max(0.015, adaptiveThickness * 0.25 + slopeFactor * 0.025 + linearDepth * 0.0008);
+            // Slope-adaptive bias: prevents cylindrical & dish polygon facets from self-shadowing
+            float bias = max(0.02, adaptiveThickness * 0.30 + slopeFactor * 0.035 + linearDepth * 0.0008);
             float occlusion = 0.0;
 
             [unroll(16)]
