@@ -5,10 +5,10 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         #include "Packages/com.unity.postprocessing/PostProcessing/Shaders/Colors.hlsl"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
-        TEXTURE2D_SAMPLER2D(_FlareBaseTex, sampler_FlareBaseTex);
-        TEXTURE2D_SAMPLER2D(_FlareStreakTex, sampler_FlareStreakTex);
-        TEXTURE2D_SAMPLER2D(_FlareSpikesTex, sampler_FlareSpikesTex);
-        TEXTURE2D_SAMPLER2D(_FlareGhostTex, sampler_FlareGhostTex);
+        TEXTURE2D(_FlareBaseTex);
+        TEXTURE2D(_FlareStreakTex);
+        TEXTURE2D(_FlareSpikesTex);
+        TEXTURE2D(_FlareGhostTex);
 
         float4 _MainTex_TexelSize;
         float4 _ThresholdParams; // x: threshold, y: threshold - knee, z: knee * 2, w: 0.25 / knee
@@ -98,7 +98,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
                              + SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(dx * 0.5, 0.0)).rgb * 0.25;
 
             // Additive combination with current mip level
-            float3 baseCol = SAMPLE_TEXTURE2D(_FlareBaseTex, sampler_FlareBaseTex, i.texcoord).rgb;
+            float3 baseCol = SAMPLE_TEXTURE2D(_FlareBaseTex, sampler_MainTex, i.texcoord).rgb;
             return float4(baseCol + upsampled * _StreakSpread, 1.0);
         }
 
@@ -129,45 +129,29 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             return float4(sum * (_SpikeIntensity * 0.07), 1.0);
         }
 
-        // Pass 5: Defocused Lens Ghosts with 8-Tap Fibonacci Aperture Disk & Chromatic Rim
+        // Pass 5: Defocused Lens Ghosts & Halo (Continuous Smooth Disc)
         float4 FragGhosts(VaryingsDefault i) : SV_Target
         {
             float2 center = float2(0.5, 0.5);
             float2 toCenter = center - i.texcoord;
             float3 ghostCol = float3(0, 0, 0);
 
-            static const float2 kApertureDisc[8] = {
-                float2( 0.000,  0.000),
-                float2( 0.528,  0.412),
-                float2(-0.482,  0.615),
-                float2(-0.731, -0.298),
-                float2(-0.115, -0.852),
-                float2( 0.694, -0.551),
-                float2( 0.887,  0.192),
-                float2( 0.153,  0.921)
-            };
-
             const float ghostScales[4] = { -0.5, 0.35, -0.85, 1.25 };
             const float ghostWeights[4] = { 0.6, 0.8, 0.4, 0.3 };
-            const float ghostDefocus[4] = { 18.0, 12.0, 24.0, 8.0 };
+            const float ghostDefocus[4] = { 10.0, 6.0, 14.0, 5.0 };
 
             for (int g = 0; g < 4; g++)
             {
                 float2 ghostCenterUV = i.texcoord + toCenter * (ghostScales[g] * _GhostSpread);
-                float2 dispOffset = toCenter * (_FlareParams.z * 0.02);
-                float radius = ghostDefocus[g] * _MainTex_TexelSize.xy * 1.5;
+                float2 dispOffset = toCenter * (_FlareParams.z * 0.015);
+                float2 rad = ghostDefocus[g] * _MainTex_TexelSize.xy;
 
-                float3 ghostDiscAcc = float3(0, 0, 0);
-                [unroll]
-                for (int k = 0; k < 8; k++)
-                {
-                    float2 sampleUV = ghostCenterUV + kApertureDisc[k] * radius;
-                    float r = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV + dispOffset).r;
-                    float g = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV).g;
-                    float b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV - dispOffset).b;
-                    ghostDiscAcc += float3(r, g, b);
-                }
-                ghostDiscAcc *= 0.125;
+                // Continuous 4-tap box filter with smooth chromatic dispersion: no discrete dot lattice!
+                float3 s0 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV - rad + dispOffset).rgb;
+                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + float2(rad.x, -rad.y)).rgb;
+                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + float2(-rad.x, rad.y)).rgb;
+                float3 s3 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + rad - dispOffset).rgb;
+                float3 ghostDiscAcc = (s0 + s1 + s2 + s3) * 0.25;
 
                 float distToCenter = length(ghostCenterUV - center);
                 float vignette = saturate(1.0 - distToCenter * 1.2);
@@ -195,9 +179,9 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
             float4 orig = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float3 streak = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_FlareStreakTex, i.texcoord).rgb * (_StreakIntensity * _StreakColor.rgb);
-            float3 spikes = SAMPLE_TEXTURE2D(_FlareSpikesTex, sampler_FlareSpikesTex, i.texcoord).rgb;
-            float3 ghosts = SAMPLE_TEXTURE2D(_FlareGhostTex, sampler_FlareGhostTex, i.texcoord).rgb;
+            float3 streak = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_MainTex, i.texcoord).rgb * (_StreakIntensity * _StreakColor.rgb * 2.0);
+            float3 spikes = SAMPLE_TEXTURE2D(_FlareSpikesTex, sampler_MainTex, i.texcoord).rgb;
+            float3 ghosts = SAMPLE_TEXTURE2D(_FlareGhostTex, sampler_MainTex, i.texcoord).rgb;
 
             float3 finalFlare = streak + spikes + ghosts;
             return float4(orig.rgb + finalFlare, orig.a);

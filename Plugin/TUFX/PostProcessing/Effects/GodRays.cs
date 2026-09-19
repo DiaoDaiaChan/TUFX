@@ -110,7 +110,8 @@ namespace UnityEngine.Rendering.PostProcessing
 
             // Auto-adapt intensity based on atmospheric density: dense Tyndall in air, clean optical corona in space
             double atmDensity = (FlightGlobals.ActiveVessel != null) ? FlightGlobals.ActiveVessel.atmDensity : 0.0;
-            float spaceFactor = Mathf.Lerp(settings.spaceIntensity.value, 1.0f, Mathf.Clamp01((float)atmDensity * 2.0f));
+            float minSpaceIntensity = Mathf.Max(0.4f, settings.spaceIntensity.value);
+            float spaceFactor = Mathf.Lerp(minSpaceIntensity, 1.0f, Mathf.Clamp01((float)atmDensity * 2.0f));
 
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetVector("_SunScreenPos", new Vector2(vp.x, vp.y));
@@ -119,7 +120,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Density", settings.density.value);
             sheet.properties.SetFloat("_Decay", settings.decay.value);
             sheet.properties.SetFloat("_Weight", settings.weight.value);
-            sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor);
+            sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor * 1.5f);
             sheet.properties.SetColor("_RayColor", settings.rayColor.value);
 
             int width = context.width / 2;

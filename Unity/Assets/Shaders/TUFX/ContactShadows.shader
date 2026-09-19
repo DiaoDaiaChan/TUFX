@@ -92,8 +92,8 @@ Shader "Hidden/TUFX/ContactShadows"
             float adaptiveThickness = clamp(max(_Thickness, linearDepth * 0.001), 0.01, 0.08);
             float adaptiveRayLength = clamp(max(_RayLength, linearDepth * 0.003), 0.03, 0.25);
 
-            // Generous normal bias to lift ray origin reliably above curved cylinder geometry
-            float normalBias = max(0.008, adaptiveThickness * 0.25);
+            // Generous normal bias to lift ray origin reliably above polygon facets of curved geometry
+            float normalBias = max(0.015, adaptiveThickness * 0.35);
             float3 originPos = centerPos + normal * normalBias;
 
             // March towards light source in view space
@@ -125,7 +125,9 @@ Shader "Hidden/TUFX/ContactShadows"
             float invZ_start = 1.0 / originPos.z;
             float invZ_end   = 1.0 / endPos.z;
 
-            float bias = adaptiveThickness * 0.15 + 0.002;
+            // Slope-adaptive bias: prevents cylindrical polygon facets from self-shadowing into checkerboard squares
+            float slopeFactor = saturate(1.0 - NdotL);
+            float bias = max(0.015, adaptiveThickness * 0.25 + slopeFactor * 0.025 + linearDepth * 0.0008);
             float occlusion = 0.0;
 
             [unroll(16)]
@@ -162,7 +164,7 @@ Shader "Hidden/TUFX/ContactShadows"
             return float4(shadow, shadow, shadow, 1.0);
         }
 
-        // Pass 1: Edge-preserving bilateral filter for Contact Shadows
+        // Pass 1: 8-tap Edge-preserving bilateral filter for Contact Shadows (eliminates checkerboard dither)
         float4 FragContactShadowDenoise(VaryingsDefault i) : SV_Target
         {
             float centerShadow = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).r;
@@ -179,13 +181,15 @@ Shader "Hidden/TUFX/ContactShadows"
             float sum = centerShadow;
             float totalWeight = 1.0;
 
-            const float2 offsets[4] = {
-                float2( 1.0,  0.0), float2(-1.0,  0.0),
-                float2( 0.0,  1.0), float2( 0.0, -1.0)
+            const float2 offsets[8] = {
+                float2( 1.2,  0.0), float2(-1.2,  0.0),
+                float2( 0.0,  1.2), float2( 0.0, -1.2),
+                float2( 0.9,  0.9), float2(-0.9,  0.9),
+                float2( 0.9, -0.9), float2(-0.9, -0.9)
             };
 
             [unroll]
-            for (int k = 0; k < 4; k++)
+            for (int k = 0; k < 8; k++)
             {
                 float2 uv = i.texcoord + offsets[k] * texel;
                 float sampleShadow = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).r;
@@ -193,7 +197,7 @@ Shader "Hidden/TUFX/ContactShadows"
                 float sampleDepth = LinearEyeDepth(sampleRaw);
 
                 float depthDiff = abs(centerDepth - sampleDepth);
-                float w = exp(-depthDiff / max(0.05, centerDepth * 0.04));
+                float w = exp(-depthDiff / max(0.12, centerDepth * 0.035));
 
                 sum += sampleShadow * w;
                 totalWeight += w;
@@ -207,7 +211,7 @@ Shader "Hidden/TUFX/ContactShadows"
         float4 FragContactShadowComposite(VaryingsDefault i) : SV_Target
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, i.texcoord).r;
+            float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_MainTex, i.texcoord).r;
             return float4(scene.rgb * shadow, scene.a);
         }
     ENDHLSL

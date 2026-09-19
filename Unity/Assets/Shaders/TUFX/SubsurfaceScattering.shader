@@ -5,7 +5,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
         TEXTURE2D_SAMPLER2D(_CameraDepthTexture, sampler_CameraDepthTexture);
-        TEXTURE2D_SAMPLER2D(_SSSSIntermediate, sampler_SSSSIntermediate);
+        TEXTURE2D(_SSSSIntermediate);
 
         float4 _MainTex_TexelSize;
         float _ScatterRadius;
@@ -15,14 +15,14 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
         float4 _SubsurfaceColor;
 
         // Jimenez 6-tap separable subsurface kernel weights
-        static const float kernelOffsets[6] = { 0.0, 0.35, 0.78, 1.48, 2.52, 4.0 };
+        static const float kernelOffsets[6] = { 0.0, 0.05, 0.12, 0.26, 0.58, 1.0 };
         static const float3 kernelWeights[6] = {
-            float3(0.24, 0.32, 0.38),
-            float3(0.20, 0.22, 0.20),
-            float3(0.16, 0.14, 0.11),
-            float3(0.12, 0.09, 0.06),
-            float3(0.08, 0.05, 0.02),
-            float3(0.04, 0.02, 0.005)
+            float3(0.24, 0.24, 0.24),
+            float3(0.32, 0.17, 0.10),
+            float3(0.20, 0.18, 0.15),
+            float3(0.12, 0.16, 0.20),
+            float3(0.08, 0.13, 0.25),
+            float3(0.04, 0.12, 0.06)
         };
 
         // Pass 0: Horizontal Diffusion Pass (Distance-Gated)
@@ -44,7 +44,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             }
 
             float4 centerCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float scale = (_ScatterRadius / max(0.2, centerDepth)) * _MainTex_TexelSize.x * 0.4;
+            float scale = (_ScatterRadius / max(0.5, centerDepth)) * _MainTex_TexelSize.x * 1.5;
 
             float3 totalColor = centerCol.rgb * kernelWeights[0];
             float3 totalWeight = kernelWeights[0];
@@ -59,8 +59,8 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
                 float depthL = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvL));
                 float depthR = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvR));
 
-                float wL = exp(-abs(depthL - centerDepth) / max(0.005, _DepthThreshold));
-                float wR = exp(-abs(depthR - centerDepth) / max(0.005, _DepthThreshold));
+                float wL = exp(-abs(depthL - centerDepth) / max(0.02, _DepthThreshold));
+                float wR = exp(-abs(depthR - centerDepth) / max(0.02, _DepthThreshold));
 
                 float3 tapColL = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvL).rgb;
                 float3 tapColR = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvR).rgb;
@@ -90,8 +90,8 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             }
 
             float4 originalCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float4 centerCol = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_SSSSIntermediate, i.texcoord);
-            float scale = (_ScatterRadius / max(0.2, centerDepth)) * _MainTex_TexelSize.y * 0.4;
+            float4 centerCol = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, i.texcoord);
+            float scale = (_ScatterRadius / max(0.5, centerDepth)) * _MainTex_TexelSize.y * 1.5;
 
             float3 totalColor = centerCol.rgb * kernelWeights[0];
             float3 totalWeight = kernelWeights[0];
@@ -106,11 +106,11 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
                 float depthT = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvT));
                 float depthB = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uvB));
 
-                float wT = exp(-abs(depthT - centerDepth) / max(0.005, _DepthThreshold));
-                float wB = exp(-abs(depthB - centerDepth) / max(0.005, _DepthThreshold));
+                float wT = exp(-abs(depthT - centerDepth) / max(0.02, _DepthThreshold));
+                float wB = exp(-abs(depthB - centerDepth) / max(0.02, _DepthThreshold));
 
-                float3 tapColT = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_SSSSIntermediate, uvT).rgb;
-                float3 tapColB = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_SSSSIntermediate, uvB).rgb;
+                float3 tapColT = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, uvT).rgb;
+                float3 tapColB = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, uvB).rgb;
 
                 totalColor += tapColT * (kernelWeights[k] * wT) + tapColB * (kernelWeights[k] * wB);
                 totalWeight += kernelWeights[k] * (wT + wB);
@@ -120,7 +120,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             float3 sssColor = blurred * _SubsurfaceColor.rgb;
 
             // Distance smooth fadeout to 0 when approaching _MaxDistance
-            float distFade = saturate((_MaxDistance - centerDepth) / max(1.0, _MaxDistance * 0.3));
+            float distFade = saturate((_MaxDistance - centerDepth) / max(1.0, _MaxDistance * 0.25));
             float3 result = lerp(originalCol.rgb, sssColor, _Intensity * distFade);
             return float4(result, originalCol.a);
         }

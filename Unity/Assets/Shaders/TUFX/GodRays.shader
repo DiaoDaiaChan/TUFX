@@ -5,7 +5,7 @@ Shader "Hidden/TUFX/GodRays"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
         TEXTURE2D_SAMPLER2D(_CameraDepthTexture, sampler_CameraDepthTexture);
-        TEXTURE2D_SAMPLER2D(_RaysTex, sampler_RaysTex);
+        TEXTURE2D(_RaysTex);
         float4 _MainTex_TexelSize;
         float2 _SunScreenPos; // Viewport UV of the Sun
         float _SunVisible;    // 1 if Sun is in front of camera hemisphere, 0 if behind
@@ -16,7 +16,8 @@ Shader "Hidden/TUFX/GodRays"
         float _Intensity;
         float4 _RayColor;
 
-        // Pass 0: Extract light ONLY from the Sun's optical disc and corona neighborhood
+        // Pass 0: Procedural Sun Light Source with Scene Depth Occlusion
+        // Only the Sun emits God Rays; spacecraft and engines can ONLY block light (casting shadows)
         float4 FragExtract(VaryingsDefault i) : SV_Target
         {
             if (_SunVisible <= 0.0)
@@ -24,39 +25,36 @@ Shader "Hidden/TUFX/GodRays"
                 return float4(0, 0, 0, 0);
             }
 
-            // Strictly restrict light extraction to the angular cone around the Sun!
-            // Engine flames and other bright objects on screen CANNOT emit god rays!
             float2 sunVec = (i.texcoord - _SunScreenPos) * float2(_MainTex_TexelSize.z / _MainTex_TexelSize.w, 1.0);
             float sunDist = length(sunVec);
-            if (sunDist > 0.38)
+
+            // Confine procedural solar light disc and corona
+            if (sunDist > 0.35)
             {
                 return float4(0, 0, 0, 0);
             }
 
-            float sunFalloff = saturate(1.0 - sunDist / 0.38);
-            sunFalloff = sunFalloff * sunFalloff;
+            // Core solar disc + exponential corona
+            float sunDisc = saturate((0.04 - sunDist) / 0.015) * 3.0;
+            float sunCorona = exp(-sunDist * 14.0) * 1.2;
+            float sunSource = sunDisc + sunCorona;
 
+            // Depth occlusion: spacecraft, vessels, and terrain block the Sun
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
+            #if UNITY_REVERSED_Z
+                bool isSky = (rawDepth <= 0.0001);
+            #else
+                bool isSky = (rawDepth >= 0.9999);
+            #endif
             float linearDepth = LinearEyeDepth(rawDepth);
 
-            // Foreground geometry (< 100m) casts volumetric shadows by blocking the sun
-            float passThrough = saturate((linearDepth - 5.0) / 95.0);
-            #if UNITY_REVERSED_Z
-                if (rawDepth <= 0.0001) passThrough = 1.0;
-            #else
-                if (rawDepth >= 0.9999) passThrough = 1.0;
-            #endif
+            // If an object is closer than 3000m and not sky, it fully blocks the sun
+            float occl = (isSky || linearDepth > 3000.0) ? 1.0 : saturate((linearDepth - 20.0) / 100.0);
 
-            float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float luma = dot(col.rgb, float3(0.2126, 0.7152, 0.0722));
-
-            float brightness = saturate((luma - _Threshold) / max(0.01, _Threshold));
-            float lightEnergy = brightness * passThrough * sunFalloff;
-
-            return float4(col.rgb * lightEnergy, 1.0);
+            return float4(sunSource * occl, sunSource * occl, sunSource * occl, 1.0);
         }
 
-        // Pass 1: Radial blur raymarching with continuous IGN jitter
+        // Pass 1: Radial blur marching towards the Sun with continuous IGN jitter
         float4 FragRadialBlur(VaryingsDefault i) : SV_Target
         {
             if (_SunVisible <= 0.0)
@@ -65,29 +63,31 @@ Shader "Hidden/TUFX/GodRays"
             }
 
             float dither = frac(52.9829189 * frac(dot(i.texcoord * _MainTex_TexelSize.zw, float2(0.06711056, 0.00583715))));
-            float2 deltaUV = (i.texcoord - _SunScreenPos) * (1.0 / 32.0) * _Density;
-            float2 uv = i.texcoord - deltaUV * (dither * 0.95);
+            // Step towards Sun from current pixel
+            float2 toSun = _SunScreenPos - i.texcoord;
+            float2 stepDelta = toSun * (1.0 / 36.0) * _Density;
+            float2 uv = i.texcoord + stepDelta * (dither * 0.85);
             float illuminationDecay = 1.0;
-            float4 color = float4(0, 0, 0, 0);
+            float3 color = float3(0, 0, 0);
 
-            [unroll(32)]
-            for (int s = 0; s < 32; s++)
+            [unroll(36)]
+            for (int s = 0; s < 36; s++)
             {
-                float4 sampleColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
+                float3 sampleColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).rgb;
                 color += sampleColor * (illuminationDecay * _Weight);
                 illuminationDecay *= _Decay;
-                uv -= deltaUV;
+                uv += stepDelta;
             }
 
-            return color * (_Intensity * _RayColor);
+            return float4(color * (_Intensity * _RayColor.rgb), 1.0);
         }
 
         // Pass 2: Additive Composite
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float4 rays = SAMPLE_TEXTURE2D(_RaysTex, sampler_RaysTex, i.texcoord);
-            return float4(scene.rgb + rays.rgb, scene.a);
+            float3 rays = SAMPLE_TEXTURE2D(_RaysTex, sampler_MainTex, i.texcoord).rgb;
+            return float4(scene.rgb + rays, scene.a);
         }
     ENDHLSL
 

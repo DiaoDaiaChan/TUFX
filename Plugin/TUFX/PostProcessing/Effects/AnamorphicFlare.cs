@@ -89,11 +89,21 @@ namespace UnityEngine.Rendering.PostProcessing
     internal sealed class AnamorphicFlareRenderer : PostProcessEffectRenderer<AnamorphicFlare>
     {
         private const int k_MaxPyramidLevels = 5;
-        private readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
-        private readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
+        private static readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
+        private static readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
+
+        static AnamorphicFlareRenderer()
+        {
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                m_MipsDown[k] = Shader.PropertyToID("_FlareMipDown_" + k);
+                m_MipsUp[k] = Shader.PropertyToID("_FlareMipUp_" + k);
+            }
+        }
 
         public override void Init()
         {
+            // Redundant guarantee
             for (int k = 0; k < k_MaxPyramidLevels; k++)
             {
                 m_MipsDown[k] = Shader.PropertyToID("_FlareMipDown_" + k);
