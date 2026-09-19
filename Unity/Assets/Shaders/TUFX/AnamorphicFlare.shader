@@ -130,7 +130,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             return float4(sum * (_SpikeIntensity * 0.07), 1.0);
         }
 
-        // Pass 5: Defocused Lens Ghosts & Halo (Continuous Smooth Disc)
+        // Pass 5: Lens Ghosts & Optical Halo Feature Generation (Continuous Chromatic Dispersion)
         float4 FragGhosts(VaryingsDefault i) : SV_Target
         {
             float2 center = float2(0.5, 0.5);
@@ -138,40 +138,52 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             float3 ghostCol = float3(0, 0, 0);
 
             const float ghostScales[4] = { -0.5, 0.35, -0.85, 1.25 };
-            const float ghostWeights[4] = { 0.6, 0.8, 0.4, 0.3 };
-            const float ghostDefocus[4] = { 10.0, 6.0, 14.0, 5.0 };
+            const float ghostWeights[4] = { 0.6, 0.75, 0.45, 0.35 };
+            const float3 ghostTints[4] = {
+                float3(0.75, 0.88, 1.0),  // cool cyan-blue AR coating
+                float3(0.95, 0.75, 1.0),  // soft violet-magenta
+                float3(1.0, 0.88, 0.65),  // warm amber
+                float3(0.60, 0.85, 1.0)   // deep electric cyan
+            };
 
             for (int g = 0; g < 4; g++)
             {
                 float2 ghostCenterUV = i.texcoord + toCenter * (ghostScales[g] * _GhostSpread);
-                float2 dispOffset = toCenter * (_FlareParams.z * 0.015);
-                float2 rad = ghostDefocus[g] * _MainTex_TexelSize.xy;
+                float2 dispOffset = toCenter * (_FlareParams.z * 0.018 * (float(g) * 0.35 + 0.65));
 
-                // Continuous 4-tap box filter with smooth chromatic dispersion: no discrete dot lattice!
-                float3 s0 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV - rad + dispOffset).rgb;
-                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + float2(rad.x, -rad.y)).rgb;
-                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + float2(-rad.x, rad.y)).rgb;
-                float3 s3 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + rad - dispOffset).rgb;
-                float3 ghostDiscAcc = (s0 + s1 + s2 + s3) * 0.25;
+                // Radial Chromatic Dispersion sampling (single tap per channel, continuous dispersion)
+                float r = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV + dispOffset).r;
+                float gCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV).g;
+                float b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, ghostCenterUV - dispOffset).b;
+                float3 ghostSample = float3(r, gCol, b);
 
                 float distToCenter = length(ghostCenterUV - center);
-                float vignette = saturate(1.0 - distToCenter * 1.2);
-                ghostCol += ghostDiscAcc * (ghostWeights[g] * vignette);
+                float vignette = saturate(1.0 - distToCenter * 1.3);
+                vignette = vignette * vignette;
+
+                // Soft border fade to eliminate edge clamping artifacts
+                float borderFade = saturate(ghostCenterUV.x * (1.0 - ghostCenterUV.x) * 30.0)
+                                 * saturate(ghostCenterUV.y * (1.0 - ghostCenterUV.y) * 30.0);
+
+                ghostCol += ghostSample * (ghostWeights[g] * ghostTints[g] * (vignette * borderFade));
             }
 
-            // Outer optical halo ring with smooth cosine falloff & chromatic shift
+            // Outer optical caustic halo ring with radial chromatic dispersion
             float haloRadius = 0.55 * _GhostSpread;
-            float2 haloDir = normalize(toCenter + float2(1e-4, 1e-4));
+            float2 haloDir = normalize(toCenter + float2(1e-5, 1e-5));
             float2 haloUV = i.texcoord + haloDir * haloRadius;
             float haloDist = length(toCenter) - haloRadius;
             float haloWeight = saturate(cos(clamp(haloDist * 14.0, -1.57, 1.57)));
             haloWeight = haloWeight * haloWeight;
 
+            float haloBorderFade = saturate(haloUV.x * (1.0 - haloUV.x) * 30.0)
+                                 * saturate(haloUV.y * (1.0 - haloUV.y) * 30.0);
+
             float2 dispHalo = haloDir * (_FlareParams.z * 0.015);
             float haloR = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, haloUV + dispHalo).r;
             float haloG = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, haloUV).g;
             float haloB = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, haloUV - dispHalo).b;
-            ghostCol += float3(haloR, haloG, haloB) * (haloWeight * 0.35);
+            ghostCol += float3(haloR, haloG, haloB) * (haloWeight * haloBorderFade * 0.35);
 
             return float4(ghostCol * (_GhostIntensity * _GhostColor.rgb), 1.0);
         }
@@ -204,6 +216,48 @@ Shader "Hidden/TUFX/AnamorphicFlare"
 
             float3 finalFlare = coloredStreak + spikes + ghosts;
             return float4(orig.rgb + finalFlare, orig.a);
+        }
+
+        // Pass 7: Ghost Horizontal Gaussian Blur (5 bilinear taps covering 9-tap Gaussian)
+        float4 FragGhostBlurH(VaryingsDefault i) : SV_Target
+        {
+            static const float weights[3] = { 0.2270270, 0.3162162, 0.0702703 };
+            static const float offsets[3] = { 0.0, 1.3846154, 3.2307692 };
+
+            float dx = _MainTex_TexelSize.x * 2.0;
+            float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
+
+            [unroll]
+            for (int t = 1; t < 3; t++)
+            {
+                float off = offsets[t] * dx;
+                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(off, 0.0)).rgb;
+                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(off, 0.0)).rgb;
+                col += (s1 + s2) * weights[t];
+            }
+
+            return float4(col, 1.0);
+        }
+
+        // Pass 8: Ghost Vertical Gaussian Blur (5 bilinear taps covering 9-tap Gaussian)
+        float4 FragGhostBlurV(VaryingsDefault i) : SV_Target
+        {
+            static const float weights[3] = { 0.2270270, 0.3162162, 0.0702703 };
+            static const float offsets[3] = { 0.0, 1.3846154, 3.2307692 };
+
+            float dy = _MainTex_TexelSize.y * 2.0;
+            float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
+
+            [unroll]
+            for (int t = 1; t < 3; t++)
+            {
+                float off = offsets[t] * dy;
+                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(0.0, off)).rgb;
+                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(0.0, off)).rgb;
+                col += (s1 + s2) * weights[t];
+            }
+
+            return float4(col, 1.0);
         }
     ENDHLSL
 
@@ -271,6 +325,24 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             HLSLPROGRAM
                 #pragma vertex VertDefault
                 #pragma fragment FragComposite
+            ENDHLSL
+        }
+
+        // 7: Ghost Horizontal Gaussian Blur
+        Pass
+        {
+            HLSLPROGRAM
+                #pragma vertex VertDefault
+                #pragma fragment FragGhostBlurH
+            ENDHLSL
+        }
+
+        // 8: Ghost Vertical Gaussian Blur
+        Pass
+        {
+            HLSLPROGRAM
+                #pragma vertex VertDefault
+                #pragma fragment FragGhostBlurV
             ENDHLSL
         }
     }

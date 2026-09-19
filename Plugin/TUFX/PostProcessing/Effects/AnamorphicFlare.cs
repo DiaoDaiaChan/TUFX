@@ -102,6 +102,12 @@ namespace UnityEngine.Rendering.PostProcessing
         private static readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
         private static readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
 
+        private static readonly int s_FlareThresh = Shader.PropertyToID("_FlareThreshold");
+        private static readonly int s_FlareSpikes = Shader.PropertyToID("_FlareSpikesTex");
+        private static readonly int s_FlareGhosts = Shader.PropertyToID("_FlareGhostTex");
+        private static readonly int s_GhostRaw = Shader.PropertyToID("_FlareGhostRaw");
+        private static readonly int s_GhostBlur = Shader.PropertyToID("_FlareGhostBlur");
+
         static AnamorphicFlareRenderer()
         {
             for (int k = 0; k < k_MaxPyramidLevels; k++)
@@ -157,9 +163,9 @@ namespace UnityEngine.Rendering.PostProcessing
             int height = context.height / 2;
             int hStreak = Mathf.Max(1, context.height / 4);
 
-            int rtThresh = Shader.PropertyToID("_FlareThreshold");
-            int rtSpikes = Shader.PropertyToID("_FlareSpikesTex");
-            int rtGhosts = Shader.PropertyToID("_FlareGhostTex");
+            int rtThresh = s_FlareThresh;
+            int rtSpikes = s_FlareSpikes;
+            int rtGhosts = s_FlareGhosts;
 
             var cmd = context.command;
             cmd.GetTemporaryRT(rtThresh, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
@@ -219,12 +225,28 @@ namespace UnityEngine.Rendering.PostProcessing
                 cmd.SetGlobalTexture("_FlareSpikesTex", RuntimeUtilities.blackTexture);
             }
 
-            // Pass 5: Lens Ghosts (Aperture Bokeh Defocus with 8-Tap Fibonacci Disk)
+            // Pass 5: Lens Ghosts & Halo (Feature Generation + 2-Pass Gaussian Blur)
             if (settings.ghostIntensity.value > 0f)
             {
-                cmd.GetTemporaryRT(rtGhosts, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-                cmd.BlitFullscreenTriangle(rtThresh, rtGhosts, sheet, 5);
+                int gw = Mathf.Max(1, context.width / 4);
+                int gh = Mathf.Max(1, context.height / 4);
+                cmd.GetTemporaryRT(s_GhostRaw, gw, gh, 0, FilterMode.Bilinear, context.sourceFormat);
+                cmd.GetTemporaryRT(s_GhostBlur, gw, gh, 0, FilterMode.Bilinear, context.sourceFormat);
+                cmd.GetTemporaryRT(rtGhosts, gw, gh, 0, FilterMode.Bilinear, context.sourceFormat);
+
+                // Pass 5: Feature generation (radial chromatic dispersion + optical halo)
+                cmd.BlitFullscreenTriangle(rtThresh, s_GhostRaw, sheet, 5);
+
+                // Pass 7: Horizontal Gaussian Blur
+                cmd.BlitFullscreenTriangle(s_GhostRaw, s_GhostBlur, sheet, 7);
+
+                // Pass 8: Vertical Gaussian Blur
+                cmd.BlitFullscreenTriangle(s_GhostBlur, rtGhosts, sheet, 8);
+
                 cmd.SetGlobalTexture("_FlareGhostTex", rtGhosts);
+
+                cmd.ReleaseTemporaryRT(s_GhostRaw);
+                cmd.ReleaseTemporaryRT(s_GhostBlur);
             }
             else
             {

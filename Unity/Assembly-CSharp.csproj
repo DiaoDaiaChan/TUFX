@@ -115,6 +115,7 @@
      <None Include="Assets\StockShaders\EmissiveBumpedSpecular.shader" />
      <None Include="Assets\Shaders\Noise\RandomNoise\randomNoise.cginc" />
      <None Include="Assets\Shaders\Scatter\TU-Clouds.shader" />
+     <None Include="Assets\Shaders\TUFX\ExposureMetering.shader" />
      <None Include="Assets\StockShaders\BumpedSpecular.shader" />
      <None Include="Assets\TUBIS\Shaders\RenderingFunctions.hlsl" />
      <None Include="Assets\Shaders\TUFX\GodRays.shader" />
@@ -123,6 +124,7 @@
      <None Include="Assets\Shaders\TUFX\CMAA2.shader" />
      <None Include="Assets\Shaders\Scatter\TU-Scattering.shader" />
      <None Include="Assets\Shaders\TUFX\Halation.shader" />
+     <None Include="Assets\Shaders\TUFX\ProceduralFilmGrain.shader" />
      <None Include="Assets\TUWater\Shaders\Functions.hlsl" />
      <None Include="Assets\StockShaders\ParticleAlpha.shader" />
      <None Include="Assets\Shaders\Noise\RandomNoise\randomNoise2.cginc" />
