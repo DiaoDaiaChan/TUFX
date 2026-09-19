@@ -585,6 +585,8 @@ namespace TUFX
             bool showProps = AddEffectHeader("Auto Exposure", out AutoExposure ae);
             if (showProps)
             {
+                AddEnumParameter("Metering Mode", ae.meteringMode);
+                AddFloatParameter("Space EV Floor", ae.spaceExposureFloor, -9, 9);
                 AddVector2Parameter("Filtering", ae.filtering);
                 AddFloatParameter("Min Luminance", ae.minLuminance, -9, 9);
                 AddFloatParameter("Max Luminance", ae.maxLuminance, -9, 9);
@@ -729,6 +731,8 @@ namespace TUFX
                 AddFloatParameter("Intensity", ld.intensity, -100, 100);
                 AddFloatParameter("IntensityX", ld.intensityX, 0, 1);
                 AddFloatParameter("IntensityY", ld.intensityY, 0, 1);
+                AddFloatParameter("Anamorphic Ratio", ld.anamorphicRatio, 0.5f, 2.5f);
+                AddFloatParameter("Optical Vignetting", ld.opticalVignetting, 0f, 1f);
                 AddFloatParameter("CenterX", ld.centerX, -1, 1);
                 AddFloatParameter("CenterY", ld.centerY, -1, 1);
                 AddFloatParameter("Scale", ld.scale, 0.01f, 5f);
@@ -772,6 +776,7 @@ namespace TUFX
                 AddColorParameter("Color", vg.color);
                 AddVector2Parameter("Center", vg.center);
                 AddFloatParameter("Intensity", vg.intensity, 0, 1);
+                AddFloatParameter("Optical Vignetting", vg.opticalVignetting, 0, 1);
                 AddFloatParameter("Smoothness", vg.smoothness, 0.01f, 1f);
                 AddFloatParameter("Roundness", vg.roundness, 0, 1);
                 AddBoolParameter("Rounded", vg.rounded);

@@ -1261,7 +1261,10 @@ namespace UnityEngine.Rendering.PostProcessing
 
             // Prepare exposure histogram if needed
             if (ShouldGenerateLogHistogram(context))
+            {
+                context.autoExposure = (AutoExposure)GetBundle<AutoExposure>().settings;
                 m_LogHistogram.Generate(context);
+            }
 
             // Uber effects
             RenderEffect<AutoExposure>(context);

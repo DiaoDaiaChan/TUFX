@@ -42,6 +42,18 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter centerY = new FloatParameter { value = 0f };
 
         /// <summary>
+        /// Anamorphic squeeze ratio. 1.0 is standard spherical lens. Values > 1.0 produce horizontal anamorphic barrel distortion squeeze.
+        /// </summary>
+        [Range(0.5f, 2.5f), DisplayName("Anamorphic Ratio"), Tooltip("Anamorphic squeeze ratio (1.0 = spherical, 2.0 = 2x anamorphic lens).")]
+        public FloatParameter anamorphicRatio = new FloatParameter { value = 1f };
+
+        /// <summary>
+        /// Cat's eye optical vignetting factor caused by lens barrel ray clipping.
+        /// </summary>
+        [Range(0f, 1f), DisplayName("Optical Vignetting"), Tooltip("Physical cat's eye lens barrel vignetting towards frame corners.")]
+        public FloatParameter opticalVignetting = new FloatParameter { value = 0f };
+
+        /// <summary>
         /// A global screen scaling factor.
         /// </summary>
         [Space]
@@ -56,7 +68,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
             return enabled.value
-                && !Mathf.Approximately(intensity, 0f)
+                && (!Mathf.Approximately(intensity, 0f) || opticalVignetting > 0f)
                 && (intensityX > 0f || intensityY > 0f)
                 && !RuntimeUtilities.isVREnabled;
         }
@@ -66,6 +78,8 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "IntensityX", intensityX);
             loadFloatParameter(config, "IntensityY", intensityY);
+            loadFloatParameter(config, "AnamorphicRatio", anamorphicRatio);
+            loadFloatParameter(config, "OpticalVignetting", opticalVignetting);
             loadFloatParameter(config, "CenterX", centerX);
             loadFloatParameter(config, "CenterY", centerY);
             loadFloatParameter(config, "Scale", scale);
@@ -76,6 +90,8 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "IntensityX", intensityX);
             saveFloatParameter(config, "IntensityY", intensityY);
+            saveFloatParameter(config, "AnamorphicRatio", anamorphicRatio);
+            saveFloatParameter(config, "OpticalVignetting", opticalVignetting);
             saveFloatParameter(config, "CenterX", centerX);
             saveFloatParameter(config, "CenterY", centerY);
             saveFloatParameter(config, "Scale", scale);
@@ -90,15 +106,34 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             var sheet = context.uberSheet;
 
-            float amount = 1.6f * Math.Max(Mathf.Abs(settings.intensity.value), 1f);
-            float theta = Mathf.Deg2Rad * Math.Min(160f, amount);
-            float sigma = 2f * Mathf.Tan(theta * 0.5f);
-            var p0 = new Vector4(settings.centerX.value, settings.centerY.value, Mathf.Max(settings.intensityX.value, 1e-4f), Mathf.Max(settings.intensityY.value, 1e-4f));
-            var p1 = new Vector4(settings.intensity.value >= 0f ? theta : 1f / theta, sigma, 1f / settings.scale.value, settings.intensity.value);
+            if (!Mathf.Approximately(settings.intensity.value, 0f))
+            {
+                float amount = 1.6f * Math.Max(Mathf.Abs(settings.intensity.value), 1f);
+                float theta = Mathf.Deg2Rad * Math.Min(160f, amount);
+                float sigma = 2f * Mathf.Tan(theta * 0.5f);
 
-            sheet.EnableKeyword("DISTORT");
-            sheet.properties.SetVector(ShaderIDs.Distortion_CenterScale, p0);
-            sheet.properties.SetVector(ShaderIDs.Distortion_Amount, p1);
+                float xIntensity = Mathf.Max(settings.intensityX.value * settings.anamorphicRatio.value, 1e-4f);
+                float yIntensity = Mathf.Max(settings.intensityY.value, 1e-4f);
+
+                var p0 = new Vector4(settings.centerX.value, settings.centerY.value, xIntensity, yIntensity);
+                var p1 = new Vector4(settings.intensity.value >= 0f ? theta : 1f / theta, sigma, 1f / settings.scale.value, settings.intensity.value);
+
+                sheet.EnableKeyword("DISTORT");
+                sheet.properties.SetVector(ShaderIDs.Distortion_CenterScale, p0);
+                sheet.properties.SetVector(ShaderIDs.Distortion_Amount, p1);
+            }
+
+            if (settings.opticalVignetting.value > 0f)
+            {
+                sheet.EnableKeyword("VIGNETTE");
+                sheet.properties.SetColor(ShaderIDs.Vignette_Color, Color.black);
+                sheet.properties.SetFloat(ShaderIDs.Vignette_Mode, 0f);
+                sheet.properties.SetVector(ShaderIDs.Vignette_Center, new Vector2(0.5f + settings.centerX.value * 0.1f, 0.5f + settings.centerY.value * 0.1f));
+                float optIntensity = settings.opticalVignetting.value * 1.8f;
+                float optSmoothness = 0.6f * 5f;
+                float optRoundness = Mathf.Clamp(1.0f / Mathf.Max(0.1f, settings.anamorphicRatio.value), 0.2f, 2.0f);
+                sheet.properties.SetVector(ShaderIDs.Vignette_Settings, new Vector4(optIntensity, optSmoothness, optRoundness, 1f));
+            }
         }
     }
 }

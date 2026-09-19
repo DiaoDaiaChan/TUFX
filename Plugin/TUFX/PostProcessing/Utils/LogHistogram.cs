@@ -27,10 +27,39 @@ namespace UnityEngine.Rendering.PostProcessing
             compute.GetKernelThreadGroupSizes(kernel, out threadX, out threadY, out threadZ);
             cmd.DispatchCompute(compute, kernel, Mathf.CeilToInt(k_Bins / (float)threadX), 1, 1);
 
+            // Metering check: if a non-matrix metering mode is requested, blit through ExposureMetering shader
+            RenderTargetIdentifier histogramSource = context.source;
+            int tempMeterRT = -1;
+
+            if (context.autoExposure != null && context.autoExposure.meteringMode.value != MeteringMode.Matrix)
+            {
+                var meterShader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null)
+                    ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/ExposureMetering")
+                    : null;
+                if (meterShader == null) meterShader = Shader.Find("Hidden/TUFX/ExposureMetering");
+
+                if (meterShader != null)
+                {
+                    var sheet = context.propertySheets.Get(meterShader);
+                    float aspect = (float)context.width / Mathf.Max(1, context.height);
+                    sheet.properties.SetVector("_MeteringParams", new Vector4(
+                        (float)context.autoExposure.meteringMode.value,
+                        context.autoExposure.spaceExposureFloor.value,
+                        aspect,
+                        0f
+                    ));
+
+                    tempMeterRT = Shader.PropertyToID("_ExposureMeteringRT");
+                    cmd.GetTemporaryRT(tempMeterRT, context.width, context.height, 0, FilterMode.Bilinear, context.sourceFormat);
+                    cmd.BlitFullscreenTriangle(context.source, tempMeterRT, sheet, 0);
+                    histogramSource = tempMeterRT;
+                }
+            }
+
             // Get a log histogram
             kernel = compute.FindKernel("KEyeHistogram");
             cmd.SetComputeBufferParam(compute, kernel, "_HistogramBuffer", data);
-            cmd.SetComputeTextureParam(compute, kernel, "_Source", context.source);
+            cmd.SetComputeTextureParam(compute, kernel, "_Source", histogramSource);
             cmd.SetComputeVectorParam(compute, "_ScaleOffsetRes", scaleOffsetRes);
 
             compute.GetKernelThreadGroupSizes(kernel, out threadX, out threadY, out threadZ);
@@ -39,6 +68,11 @@ namespace UnityEngine.Rendering.PostProcessing
                 Mathf.CeilToInt(scaleOffsetRes.w / 2f / threadY),
                 1
             );
+
+            if (tempMeterRT != -1)
+            {
+                cmd.ReleaseTemporaryRT(tempMeterRT);
+            }
 
             cmd.EndSample("LogHistogram");
         }

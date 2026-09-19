@@ -261,7 +261,8 @@ namespace TUFX
             Resources.shaders.discardAlpha = getShader("Hidden/PostProcessing/DiscardAlpha");
             Resources.shaders.finalPass = getShader("Hidden/PostProcessing/FinalPass");
             Resources.shaders.gammaHistogram = getShader("Hidden/PostProcessing/Debug/Histogram");//TODO - part of debug shaders?
-            Resources.shaders.grainBaker = getShader("Hidden/PostProcessing/GrainBaker");
+            Shader advGrain = getShader("Hidden/TUFX/GrainBaker");
+            Resources.shaders.grainBaker = advGrain != null ? advGrain : getShader("Hidden/PostProcessing/GrainBaker");
             Resources.shaders.lightMeter = getShader("Hidden/PostProcessing/Debug/LightMeter");//TODO - part of debug shaders?
             Resources.shaders.lut2DBaker = getShader("Hidden/PostProcessing/Lut2DBaker");
             Resources.shaders.motionBlur = getShader("Hidden/PostProcessing/MotionBlur");

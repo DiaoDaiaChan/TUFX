@@ -26,12 +26,41 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class EyeAdaptationParameter : ParameterOverride<EyeAdaptation> {}
 
     /// <summary>
+    /// Exposure metering modes.
+    /// </summary>
+    public enum MeteringMode
+    {
+        Matrix = 0,
+        CenterWeighted = 1,
+        Spot = 2,
+        VesselGeometry = 3
+    }
+
+    /// <summary>
+    /// A volume parameter holding a <see cref="MeteringMode"/> value.
+    /// </summary>
+    [Serializable]
+    public sealed class MeteringModeParameter : ParameterOverride<MeteringMode> {}
+
+    /// <summary>
     /// This class holds settings for the Auto Exposure effect.
     /// </summary>
     [Serializable]
     [PostProcess(typeof(AutoExposureRenderer), "Unity/Auto Exposure")]
     public sealed class AutoExposure : PostProcessEffectSettings
     {
+        /// <summary>
+        /// Exposure metering mode.
+        /// </summary>
+        [DisplayName("Metering Mode"), Tooltip("Exposure metering mode: Matrix (full-frame), Center-Weighted, Spot (center 25%), or Vessel Geometry (depth-masked spacecraft).")]
+        public MeteringModeParameter meteringMode = new MeteringModeParameter { value = MeteringMode.CenterWeighted };
+
+        /// <summary>
+        /// Minimum average luminance floor in deep space (in EV) to prevent overexposure from pure black sky.
+        /// </summary>
+        [Range(LogHistogram.rangeMin, LogHistogram.rangeMax), DisplayName("Deep Space EV Floor"), Tooltip("Floor for minimum luminance adaptation in deep space to prevent overexposure from pure black skybox.")]
+        public FloatParameter spaceExposureFloor = new FloatParameter { value = -4f };
+
         /// <summary>
         /// These values are the lower and upper percentages of the histogram that will be used to
         /// find a stable average luminance. Values outside of this range will be discarded and wont
@@ -100,7 +129,9 @@ namespace UnityEngine.Rendering.PostProcessing
             loadEnumParameter(config, "EyeAdaption", eyeAdaptation, typeof(EyeAdaptation));
             loadFloatParameter(config, "SpeedUp", speedUp);
             loadFloatParameter(config, "SpeedDown", speedDown);
-    }
+            loadEnumParameter(config, "MeteringMode", meteringMode, typeof(MeteringMode));
+            loadFloatParameter(config, "SpaceExposureFloor", spaceExposureFloor);
+        }
 
         public override void Save(ConfigNode config)
         {
@@ -111,6 +142,8 @@ namespace UnityEngine.Rendering.PostProcessing
             saveEnumParameter(config, "EyeAdaption", eyeAdaptation);
             saveFloatParameter(config, "SpeedUp", speedUp);
             saveFloatParameter(config, "SpeedDown", speedDown);
+            saveEnumParameter(config, "MeteringMode", meteringMode);
+            saveFloatParameter(config, "SpaceExposureFloor", spaceExposureFloor);
         }
 
     }
@@ -159,9 +192,11 @@ namespace UnityEngine.Rendering.PostProcessing
             highPercent = Mathf.Clamp(highPercent, 1f + kMinDelta, 99f);
             lowPercent = Mathf.Clamp(lowPercent, 1f, highPercent - kMinDelta);
 
-            // Clamp min/max adaptation values as well
+            // Clamp min/max adaptation values as well, enforcing space exposure floor
             float minLum = settings.minLuminance.value;
             float maxLum = settings.maxLuminance.value;
+            if (settings.spaceExposureFloor.value > minLum)
+                minLum = settings.spaceExposureFloor.value;
             settings.minLuminance.value = Mathf.Min(minLum, maxLum);
             settings.maxLuminance.value = Mathf.Max(minLum, maxLum);
 
