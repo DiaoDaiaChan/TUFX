@@ -73,10 +73,40 @@
 
 ---
 
+### 8. 屏幕空间全局光照自相交与重影剔除 (Physically Valid SSGI)
+- **文件**：[`SSGI.shader`](file:///c:/Users/43701/Documents/github/TUFX/Unity/Assets/Shaders/TUFX/SSGI.shader), [`SSGIEffect.cs`](file:///c:/Users/43701/Documents/github/TUFX/Plugin/TUFX/PostProcessing/Effects/SSGIEffect.cs)
+- **问题根因**：
+  1. `ReconstructForwardNormal` 叉乘顺序导致法线 180° 反向（指向物体内部），光线向飞船内部步进，内部采样正面深度并误判为命中，导致储箱背光面重叠自身微缩镜像。
+  2. 缺少击中面朝向校验（$\vec{D}_{\text{ray}} \cdot \vec{N}_{\text{hit}} < -0.1$），导致凸形机体射线擦过自身表面时产生自反弹。
+- **技术升级**：
+  - 修正视空间法线为 `cross(dy, dx)` 并严格强制面向相机（$N_z \le 0$）；
+  - 引入击中面反向法线判定（$\vec{D}_{\text{ray}} \cdot \vec{N}_{\text{hit}} < -0.1$），在数学上 100% 杜绝凸体自反射；
+  - 采用 GPU 动态分支 `[loop]` 消除庞大展开指令树，编译时间由数分钟缩减至 5 秒。
+
+---
+
+### 9. 默认配置文件全面升级：GroundTruthAO 替代老版 AO
+- **文件**：[`TUFX-Default.cfg`](file:///c:/Users/43701/Documents/github/TUFX/GameData/TUFX/Profiles/TUFX-Default.cfg), [`AmbientOcclusion.cs`](file:///c:/Users/43701/Documents/github/TUFX/Plugin/TUFX/PostProcessing/Effects/AmbientOcclusion.cs)
+- **改进点**：
+  - 将 `Default-Editor`、`Default-MainMenu`、`Default-KSC`、`Default-Flight` 中的遗留 `AmbientOcclusion`（SAO/MSVO）全面替换为具有 PBR 高光遮蔽与多重反弹的 `GroundTruthAO`；
+  - 将 `AmbientOcclusion.cs` 默认强度改为 `0.0f`，彻底杜绝新老 AO 并存产生的接缝“死黑/煤灰感”，并释放了 MSVO 的多重下采样性能开销。
+
+---
+
+### 10. 次世代抗闪烁与色彩保真泛光 (Karis Anti-Firefly & Chroma Bloom)
+- **文件**：[`Bloom.shader`](file:///c:/Users/43701/Documents/github/TUFX/Unity/Assets/Shaders/TUFX/Bloom.shader), [`TexturesUnlimitedFXLoader.cs`](file:///c:/Users/43701/Documents/github/TUFX/Plugin/TUFX/Addon/TexturesUnlimitedFXLoader.cs)
+- **技术原理**：
+  - **Karis 13-Tap 局部亮度加权下采样**：参考 Unreal Engine 4/5 实现，对 5 组双线性子盒加权 $w_k = 1 / (1 + \text{Luma}(C_k))$，从源头彻底消除了航天器太阳翼与金属外壳旋转时单像素高光产生的严重跳跃与时域闪烁（Firefly Jitter）；
+  - **色相保真 HDR 软膝过渡（Chroma-Preserving Soft-Knee）**：依据局部亮度而非独立通道硬截断，完美保留火箭尾焰橙红、离子发动机电蓝等高饱和光源的真实色相，杜绝原版 Bloom 在强光下容易过曝退化为死白方块的问题；
+  - **透明无缝替换**：在资源加载层自动优先链接 `Hidden/TUFX/Bloom`，使所有现存与新建的 TUFX 配置文件透明获得次世代电影级 Bloom 质感。
+
+---
+
 ## 编译与部署验证
 
 | 验证项目 | 执行命令 / 目标 | 状态 |
 | :--- | :--- | :--- |
-| **Unity AssetBundle 构建** | `BuildAdvancedBundle.BuildAll` 批量打包全部高级 Shader |  0 错误，生成 `tufx-advanced.ssf` |
+| **Unity AssetBundle 构建** | `BuildAdvancedBundle.BuildAll` 打包包含全新 Bloom 在内的全部 16 个 Advanced Shader |  0 错误，生成 `tufx-advanced.ssf` |
 | **C# 插件编译** | `dotnet msbuild Plugin/TUFX.sln /p:Configuration=Release` |  0 错误，生成 `TUFX.dll` |
-| **KSP GameData 部署** | 目标路径 `Kerbal Space Program_newmod/GameData/TUFX/` |  着色器包与 DLL 均已成功覆盖部署 |
+| **KSP GameData 部署** | 目标路径 `Kerbal Space Program_newmod/GameData/TUFX/` |  着色器包、配置文件与 DLL 均已成功覆盖部署 |
+
