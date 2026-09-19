@@ -11,7 +11,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter resolutionScale = new FloatParameter { value = 0.5f };
 
         [Range(0f, 5f), Tooltip("Global illumination bounce brightness multiplier.")]
-        public FloatParameter intensity = new FloatParameter { value = 2.0f };
+        public FloatParameter intensity = new FloatParameter { value = 1.2f };
 
         [Range(2, 8), Tooltip("Number of hemisphere rays per pixel.")]
         public IntParameter rayCount = new IntParameter { value = 4 };

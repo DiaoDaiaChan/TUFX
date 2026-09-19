@@ -68,10 +68,15 @@ Shader "Hidden/TUFX/SSGI"
             float3 dx = (abs(dx1.z) < abs(dx0.z)) ? dx1 : dx0;
             float3 dy = (abs(dy1.z) < abs(dy0.z)) ? dy1 : dy0;
 
-            float3 n = cross(dx, dy);
+            // In our coordinate convention (+Z forward into screen), visible front-facing surfaces
+            // must have normal pointing towards camera (-Z).
+            // cross(dy, dx) points towards camera (-Z), whereas cross(dx, dy) points into +Z (into the mesh interior!).
+            float3 n = cross(dy, dx);
             float lenSq = dot(n, n);
             if (lenSq < 0.0001) return float3(0, 0, -1);
-            return normalize(n);
+            n = normalize(n);
+            if (n.z > 0.0) n = -n;
+            return n;
         }
 
         void GetTangentSpace(float3 n, out float3 t, out float3 b)
@@ -99,12 +104,13 @@ Shader "Hidden/TUFX/SSGI"
 
             if (_IsDeferred > 0.5)
             {
-                float4 gbuf2 = _CameraGBufferTexture2.Load(int3(i.vertex.xy * 2.0, 0));
+                int2 gbufCoord = int2(i.texcoord * _ScreenParams.xy);
+                float4 gbuf2 = _CameraGBufferTexture2.Load(int3(gbufCoord, 0));
                 float3 worldNorm = gbuf2.rgb * 2.0 - 1.0;
                 if (dot(worldNorm, worldNorm) > 0.2)
                 {
                     float3 gViewNorm = mul((float3x3)_WorldToCameraMatrix, normalize(worldNorm));
-                    gViewNorm.z = -gViewNorm.z;
+                    if (gViewNorm.z > 0.0) gViewNorm.z = -gViewNorm.z;
                     viewNorm = normalize(gViewNorm);
                 }
                 else
@@ -128,7 +134,11 @@ Shader "Hidden/TUFX/SSGI"
             float3 accumulatedLight = float3(0, 0, 0);
             float accumulatedWeight = 0.0;
 
-            [unroll(8)]
+            // Lift ray origin along normal away from starting surface to prevent self-intersection
+            float normalOffset = max(0.08, viewZ * 0.005);
+            float3 rayOrigin = viewPos + viewNorm * normalOffset;
+
+            [loop]
             for (int r = 0; r < 8; r++)
             {
                 if (r >= rayCount) break;
@@ -138,32 +148,54 @@ Shader "Hidden/TUFX/SSGI"
                 float radius = sqrt((float(r) + 0.5) / float(rayCount));
                 float rx = radius * cos(alpha);
                 float ry = radius * sin(alpha);
-                float rz = sqrt(max(0.001, 1.0 - radius * radius));
+                // Guarantee rays don't skim parallel to surface horizon
+                float rz = sqrt(max(0.04, 1.0 - radius * radius));
 
                 float3 rayDir = normalize(rx * tangent + ry * bitangent + rz * viewNorm);
-                float3 rayOrigin = viewPos + viewNorm * 0.05;
 
-                [unroll(16)]
+                [loop]
                 for (int s = 1; s <= 16; s++)
                 {
                     if (s > raySteps) break;
 
-                    float t = (float(s) - 0.5 + dither * 0.5) * stepSize;
+                    // Start march offset from ray origin
+                    float t = (float(s) + dither * 0.5) * stepSize;
                     float3 marchPos = rayOrigin + rayDir * t;
+
+                    // If ray marches behind camera, terminate
+                    if (marchPos.z <= 0.1) break;
 
                     float2 sampleUV = ProjectViewToUV(marchPos);
                     if (any(sampleUV < 0.0) || any(sampleUV > 1.0)) break;
 
+                    // Skip self-neighborhood in screen space (prevents near-field self-intersection)
+                    if (length(sampleUV - i.texcoord) < _MainTex_TexelSize.x * 5.0) continue;
+
                     float sampleRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, sampleUV);
+                    #if UNITY_REVERSED_Z
+                        if (sampleRawDepth <= 0.00005) continue;
+                    #else
+                        if (sampleRawDepth >= 0.99995) continue;
+                    #endif
+
                     float sampleEyeDepth = LinearEyeDepth(sampleRawDepth);
 
                     float depthDelta = marchPos.z - sampleEyeDepth;
                     float adaptiveThickness = max(_Thickness, marchPos.z * 0.025);
-                    float bias = max(0.015, adaptiveThickness * 0.05);
+                    float bias = max(0.025, adaptiveThickness * 0.06);
 
                     if (depthDelta > bias && depthDelta < adaptiveThickness)
                     {
-                        // Ray hit geometry! Sample irradiance from hit position
+                        // Validate hit surface normal:
+                        // A physically valid bounce requires the hit surface to face AGAINST the incident ray (dot(rayDir, hitNorm) < -0.1).
+                        // If dot(rayDir, hitNorm) >= -0.1, the ray is hitting from behind or grazing the same hull (self-reflection).
+                        float3 hitNorm = ReconstructForwardNormal(sampleUV, sampleEyeDepth);
+                        if (dot(rayDir, hitNorm) >= -0.1)
+                        {
+                            continue; // Self-intersection / grazing / backface hit rejected!
+                        }
+
+                        // Ray hit valid opposing geometry! Sample irradiance from hit position
                         float3 hitColor = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 1.0).rgb;
 
                         // Edge fade and distance falloff
@@ -281,7 +313,8 @@ Shader "Hidden/TUFX/SSGI"
             float3 albedo = float3(0.5, 0.5, 0.5);
             if (_IsDeferred > 0.5)
             {
-                float4 gbuf0 = _CameraGBufferTexture0.Load(int3(i.vertex.xy, 0));
+                int2 gbufCoord = int2(i.texcoord * _ScreenParams.xy);
+                float4 gbuf0 = _CameraGBufferTexture0.Load(int3(gbufCoord, 0));
                 if (dot(gbuf0.rgb, 1.0) > 0.01)
                 {
                     albedo = gbuf0.rgb;
