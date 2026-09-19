@@ -250,7 +250,8 @@ namespace TUFX
             }
 
             #region REGION - Load standard Post Process Effect Shaders
-            Resources.shaders.bloom = getShader("Hidden/PostProcessing/Bloom");
+            Shader advBloom = getShader("Hidden/TUFX/Bloom");
+            Resources.shaders.bloom = advBloom != null ? advBloom : getShader("Hidden/PostProcessing/Bloom");
             Resources.shaders.copy = getShader("Hidden/PostProcessing/Copy");
             Resources.shaders.copyStd = getShader("Hidden/PostProcessing/CopyStd");
             Resources.shaders.copyStdFromDoubleWide = getShader("Hidden/PostProcessing/CopyStdFromDoubleWide");

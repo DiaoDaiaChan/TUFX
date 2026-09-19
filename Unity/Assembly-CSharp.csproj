@@ -152,6 +152,7 @@
      <None Include="Assets\StockShaders\AlphaBlendedZSorted.shader" />
      <None Include="Assets\Shaders\TUFX\GroundTruthAO.shader" />
      <None Include="Assets\Shaders\TUFX\ModernTonemapping.shader" />
+     <None Include="Assets\Shaders\TUFX\Bloom.shader" />
      <None Include="Assets\StockShaders\Alpha.shader" />
      <None Include="Assets\StockShaders\Alpha Half Sphere.shader" />
      <None Include="Assets\TUWater\Shaders\TUWaterSurfaceShader.shader" />
