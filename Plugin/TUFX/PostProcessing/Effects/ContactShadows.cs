@@ -18,12 +18,6 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0.005f, 0.2f), Tooltip("Surface thickness test value.")]
         public FloatParameter thickness = new FloatParameter { value = 0.03f };
 
-        [Range(5f, 200f), Tooltip("Maximum distance in meters at which contact shadows are evaluated.")]
-        public FloatParameter maxDistance = new FloatParameter { value = 50.0f };
-
-        [Range(2f, 50f), Tooltip("Distance range over which contact shadows fade out smoothly.")]
-        public FloatParameter fadeRange = new FloatParameter { value = 10.0f };
-
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
             return enabled.value && intensity.value > 0f && SystemInfo.supportsImageEffects;
@@ -35,8 +29,6 @@ namespace UnityEngine.Rendering.PostProcessing
             loadIntParameter(config, "RaySteps", raySteps);
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "Thickness", thickness);
-            loadFloatParameter(config, "MaxDistance", maxDistance);
-            loadFloatParameter(config, "FadeRange", fadeRange);
         }
 
         public override void Save(ConfigNode config)
@@ -45,8 +37,6 @@ namespace UnityEngine.Rendering.PostProcessing
             saveIntParameter(config, "RaySteps", raySteps);
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "Thickness", thickness);
-            saveFloatParameter(config, "MaxDistance", maxDistance);
-            saveFloatParameter(config, "FadeRange", fadeRange);
         }
     }
 
@@ -60,8 +50,10 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Render(PostProcessRenderContext context)
         {
-            // Bypass ScaledSpace camera entirely to prevent depth quantization artifacts on celestial bodies
-            if (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam)
+            // Contact shadows are micro-geometry shadows for local vessels and EVA in 3D flight/editor scenes.
+            // Bypass Main Menu and ScaledCamera completely to ensure zero planet interference.
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU ||
+                (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam))
             {
                 context.command.BlitFullscreenTriangle(context.source, context.destination);
                 return;
@@ -102,8 +94,6 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetInt("_RaySteps", settings.raySteps.value);
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_Thickness", settings.thickness.value);
-            sheet.properties.SetFloat("_MaxDistance", settings.maxDistance.value);
-            sheet.properties.SetFloat("_FadeRange", settings.fadeRange.value);
 
             int width = context.width;
             int height = context.height;

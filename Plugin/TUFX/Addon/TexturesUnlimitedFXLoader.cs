@@ -579,7 +579,17 @@ namespace TUFX
 			// But we don't want to apply TAA (and possibly motion blur and DoF) to anything but the local space camera since 
 			// motion vectors aren't shared between cameras, and applying TAA on multiple cameras will produce smearing
 			layer.volumeLayer = isFinalCamera ? 1 : 0;
-            layer.antialiasingMode = isPrimaryCamera ? tufxProfile.AntiAliasing : tufxProfile.SecondaryCameraAntialiasing;
+            // In MainMenu, background celestial bodies have no motion vectors.
+            // TAA causes 60Hz projection matrix jittering on planets/Earth.
+            // Fall back to SubpixelMorphologicalAntialiasing (SMAA) to prevent planetary shimmering.
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU && tufxProfile.AntiAliasing == PostProcessLayer.Antialiasing.TemporalAntialiasing)
+            {
+                layer.antialiasingMode = PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing;
+            }
+            else
+            {
+                layer.antialiasingMode = isPrimaryCamera ? tufxProfile.AntiAliasing : tufxProfile.SecondaryCameraAntialiasing;
+            }
 		}
 
         private void ApplyCurrentProfile()

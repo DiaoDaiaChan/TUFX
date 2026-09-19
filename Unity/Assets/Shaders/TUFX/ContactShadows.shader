@@ -12,8 +12,6 @@ Shader "Hidden/TUFX/ContactShadows"
         int _RaySteps;
         float _Intensity;
         float _Thickness;
-        float _MaxDistance;
-        float _FadeRange;
 
         float3 ReconstructViewPos(float2 uv, float linearDepth)
         {
@@ -33,8 +31,7 @@ Shader "Hidden/TUFX/ContactShadows"
             #endif
 
             float linearDepth = LinearEyeDepth(rawDepth);
-            // Strict distance cutoff: contact shadows are screen-space micro-shadows (<= 50m)
-            if (linearDepth > _MaxDistance || linearDepth <= 0.01)
+            if (linearDepth <= 0.01)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
@@ -47,6 +44,20 @@ Shader "Hidden/TUFX/ContactShadows"
             float4 endClip = mul(unity_CameraProjection, float4(endPos, 1.0));
             if (abs(endClip.w) < 0.0001) return float4(1.0, 1.0, 1.0, 1.0);
             float2 endUV = (endClip.xy / endClip.w) * 0.5 + 0.5;
+
+            // Adaptive Scale-Independent Metric (Zero hardcoded distance!):
+            // Measure the ray length in actual screen pixels.
+            // In any celestial scale (Stock, RSS, JNSQ, Beyond Home), distant celestial bodies
+            // or terrain project a 15cm ray to a tiny subpixel fraction (< 2.0 pixels).
+            // Raymarching subpixel steps on distant curved bodies produces depth-quantization artifacts!
+            float2 rayPixelDelta = (endUV - i.texcoord) * _MainTex_TexelSize.zw;
+            float rayPixelDist = length(rayPixelDelta);
+
+            if (rayPixelDist < 2.0)
+            {
+                return float4(1.0, 1.0, 1.0, 1.0);
+            }
+
             float2 rayStepUV = (endUV - i.texcoord) / (float)_RaySteps;
 
             float shadow = 1.0;
@@ -76,11 +87,11 @@ Shader "Hidden/TUFX/ContactShadows"
                 }
             }
 
-            // Smooth distance fade near _MaxDistance
-            if (linearDepth > _MaxDistance - _FadeRange)
+            // Smooth scale-independent pixel-span fade out
+            if (rayPixelDist < 5.0)
             {
-                float fade = saturate((_MaxDistance - linearDepth) / max(0.001, _FadeRange));
-                shadow = lerp(1.0, shadow, fade);
+                float pixelFade = saturate((rayPixelDist - 2.0) / 3.0);
+                shadow = lerp(1.0, shadow, pixelFade);
             }
 
             return float4(shadow, shadow, shadow, 1.0);

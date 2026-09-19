@@ -6,7 +6,7 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(GroundTruthAORenderer), PostProcessEvent.BeforeStack, "TUFX/Ground Truth Ambient Occlusion (GTAO)")]
     public sealed class GroundTruthAO : PostProcessEffectSettings
     {
-        [Range(0.05f, 5f), Tooltip("Radius of the occlusion sampling sphere.")]
+        [Range(0.05f, 5f), Tooltip("Radius of the occlusion sampling sphere in view space.")]
         public FloatParameter radius = new FloatParameter { value = 1.0f };
 
         [Range(0f, 4f), Tooltip("Occlusion darkness intensity.")]
@@ -17,12 +17,6 @@ namespace UnityEngine.Rendering.PostProcessing
 
         [Range(0f, 1f), Tooltip("Multi-bounce approximation to simulate indirect bounce light in crevices.")]
         public FloatParameter multiBounce = new FloatParameter { value = 0.5f };
-
-        [Range(10f, 500f), Tooltip("Maximum distance in meters at which ambient occlusion is evaluated.")]
-        public FloatParameter maxDistance = new FloatParameter { value = 150.0f };
-
-        [Range(5f, 100f), Tooltip("Distance range over which ambient occlusion fades out smoothly.")]
-        public FloatParameter fadeRange = new FloatParameter { value = 30.0f };
 
         [Tooltip("Custom ambient occlusion shadow tint color.")]
         public ColorParameter color = new ColorParameter { value = Color.black };
@@ -38,8 +32,6 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "Thickness", thickness);
             loadFloatParameter(config, "MultiBounce", multiBounce);
-            loadFloatParameter(config, "MaxDistance", maxDistance);
-            loadFloatParameter(config, "FadeRange", fadeRange);
             loadColorParameter(config, "Color", color);
         }
 
@@ -49,8 +41,6 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "Thickness", thickness);
             saveFloatParameter(config, "MultiBounce", multiBounce);
-            saveFloatParameter(config, "MaxDistance", maxDistance);
-            saveFloatParameter(config, "FadeRange", fadeRange);
             saveColorParameter(config, "Color", color);
         }
     }
@@ -65,8 +55,10 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Render(PostProcessRenderContext context)
         {
-            // Bypass ScaledSpace camera entirely to prevent depth precision artifacts on celestial bodies
-            if (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam)
+            // GTAO is designed for near-field geometric crevices.
+            // Bypass Main Menu and ScaledCamera completely to ensure zero planet interference.
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU ||
+                (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam))
             {
                 context.command.BlitFullscreenTriangle(context.source, context.destination);
                 return;
@@ -81,8 +73,6 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_Thickness", settings.thickness.value);
             sheet.properties.SetFloat("_MultiBounce", settings.multiBounce.value);
-            sheet.properties.SetFloat("_MaxDistance", settings.maxDistance.value);
-            sheet.properties.SetFloat("_FadeRange", settings.fadeRange.value);
             sheet.properties.SetColor("_AOColor", settings.color.value);
 
             int width = context.width;

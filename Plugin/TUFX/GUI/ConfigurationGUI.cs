@@ -618,8 +618,6 @@ namespace TUFX
                 AddFloatParameter("Intensity", gtao.intensity, 0f, 4f);
                 AddFloatParameter("Thickness", gtao.thickness, 0.1f, 5f);
                 AddFloatParameter("Multi-Bounce", gtao.multiBounce, 0f, 1f);
-                AddFloatParameter("Max Distance", gtao.maxDistance, 10f, 500f);
-                AddFloatParameter("Fade Range", gtao.fadeRange, 5f, 100f);
                 AddColorParameter("Color", gtao.color);
             }
             GUILayout.EndVertical();
@@ -634,8 +632,6 @@ namespace TUFX
                 AddIntParameter("Steps", cs.raySteps, 4, 16);
                 AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
                 AddFloatParameter("Thickness", cs.thickness, 0.005f, 0.1f);
-                AddFloatParameter("Max Distance", cs.maxDistance, 5f, 200f);
-                AddFloatParameter("Fade Range", cs.fadeRange, 2f, 50f);
             }
             GUILayout.EndVertical();
         }

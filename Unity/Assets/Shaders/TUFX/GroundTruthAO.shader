@@ -12,8 +12,6 @@ Shader "Hidden/TUFX/GroundTruthAO"
         float _Thickness;
         float _MultiBounce;
         float4 _AOColor;
-        float _MaxDistance;
-        float _FadeRange;
 
         float3 ReconstructViewPos(float2 uv, float linearDepth)
         {
@@ -35,14 +33,24 @@ Shader "Hidden/TUFX/GroundTruthAO"
             #endif
 
             float linearDepth = LinearEyeDepth(rawDepth);
-            // Strict distance cutoff: AO only applies to near/medium range geometry
-            if (linearDepth > _MaxDistance || linearDepth <= 0.01)
+            if (linearDepth <= 0.01)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
             float3 centerPos = ReconstructViewPos(i.texcoord, linearDepth);
             
+            // Adaptive Scale-Independent Metric (Zero hardcoded distance):
+            // Calculate screen-space pixel radius of the AO sampling sphere.
+            // When an object or planet is at distance such that the sampling sphere
+            // projects to fewer than 2.5 screen pixels, AO cannot be resolved geometrically
+            // and sampling adjacent texels causes depth derivative noise and planet flickering.
+            float projRadiusPixels = (_Radius / max(0.001, centerPos.z)) * unity_CameraProjection._11 * (_MainTex_TexelSize.z * 0.5);
+            if (projRadiusPixels < 2.5)
+            {
+                return float4(1.0, 1.0, 1.0, 1.0);
+            }
+
             // Reconstruct view-space normal from depth derivatives
             float3 dx = ddx(centerPos);
             float3 dy = ddy(centerPos);
@@ -95,10 +103,10 @@ Shader "Hidden/TUFX/GroundTruthAO"
             occlusion = 1.0 - (occlusion / (float)NUM_DIRECTIONS) * _Intensity;
             occlusion = saturate(occlusion);
 
-            // Smooth distance fade near _MaxDistance
-            if (linearDepth > _MaxDistance - _FadeRange)
+            // Smooth scale-independent pixel-radius fade out
+            if (projRadiusPixels < 6.0)
             {
-                float fade = saturate((_MaxDistance - linearDepth) / max(0.001, _FadeRange));
+                float fade = saturate((projRadiusPixels - 2.5) / 3.5);
                 occlusion = lerp(1.0, occlusion, fade);
             }
 
@@ -121,7 +129,8 @@ Shader "Hidden/TUFX/GroundTruthAO"
             #endif
 
             float centerDepth = LinearEyeDepth(rawDepth);
-            if (centerDepth > _MaxDistance)
+            float projRadiusPixels = (_Radius / max(0.001, centerDepth)) * unity_CameraProjection._11 * (_MainTex_TexelSize.z * 0.5);
+            if (projRadiusPixels < 2.5)
             {
                 return float4(1, 1, 1, 1);
             }
