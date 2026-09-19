@@ -93,6 +93,14 @@ namespace TUFX
             GUILayout.EndHorizontal();
         }
 
+        private void SwitchMode(GUIMode newMode)
+        {
+            this.selectionMode = newMode;
+            this.textures.Clear();
+            this.effect = this.property = this.texture = string.Empty;
+            textureUpdateCallback = null;
+        }
+
         void DrawHeader()
         {
             var currentProfile = TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile;
@@ -102,40 +110,45 @@ namespace TUFX
             GUILayout.Label("Mode: ".Localize(), GUILayout.Width(50));
             GUIMode currentMode = this.selectionMode;
 
-            if (GUILayout.Toggle(currentMode == GUIMode.SelectProfile, "Profiles".Localize(), GUI.skin.button, GUILayout.Width(80)))
+            bool isProfile = (currentMode == GUIMode.SelectProfile);
+            bool isStock = (currentMode == GUIMode.EditProfile);
+            bool isExtend = (currentMode == GUIMode.ExtendFX);
+            bool isProfiler = (currentMode == GUIMode.PerformanceMonitor);
+
+            if (GUILayout.Toggle(isProfile, "Profiles".Localize(), GUI.skin.button, GUILayout.Width(80)) && !isProfile)
             {
-                this.selectionMode = GUIMode.SelectProfile;
+                SwitchMode(GUIMode.SelectProfile);
             }
-            if (GUILayout.Toggle(currentMode == GUIMode.EditProfile, "Stock FX".Localize(), GUI.skin.button, GUILayout.Width(80)))
+            if (GUILayout.Toggle(isStock, "Stock FX".Localize(), GUI.skin.button, GUILayout.Width(80)) && !isStock)
             {
-                this.selectionMode = GUIMode.EditProfile;
+                SwitchMode(GUIMode.EditProfile);
             }
             Color prevColor = GUI.color;
-            GUI.color = new Color(0.3f, 0.9f, 1.0f);
-            if (GUILayout.Toggle(currentMode == GUIMode.ExtendFX, "ExtendFX ★".Localize(), GUI.skin.button, GUILayout.Width(100)))
+            if (isExtend) GUI.color = new Color(0.3f, 0.9f, 1.0f);
+            if (GUILayout.Toggle(isExtend, "ExtendFX ★".Localize(), GUI.skin.button, GUILayout.Width(100)) && !isExtend)
             {
-                this.selectionMode = GUIMode.ExtendFX;
-            }
-            GUI.color = new Color(0.4f, 1.0f, 0.4f);
-            if (GUILayout.Toggle(currentMode == GUIMode.PerformanceMonitor, "Profiler".Localize(), GUI.skin.button, GUILayout.Width(80)))
-            {
-                this.selectionMode = GUIMode.PerformanceMonitor;
+                SwitchMode(GUIMode.ExtendFX);
             }
             GUI.color = prevColor;
 
-            if (currentMode == GUIMode.SelectTexture || currentMode == GUIMode.EditSpline)
+            if (isProfiler) GUI.color = new Color(0.4f, 1.0f, 0.4f);
+            else GUI.color = new Color(0.7f, 1.0f, 0.7f);
+            if (GUILayout.Toggle(isProfiler, "Profiler".Localize(), GUI.skin.button, GUILayout.Width(85)) && !isProfiler)
+            {
+                SwitchMode(GUIMode.PerformanceMonitor);
+            }
+            GUI.color = prevColor;
+
+            if (this.selectionMode == GUIMode.SelectTexture || this.selectionMode == GUIMode.EditSpline)
             {
                 if (GUILayout.Button("Return".Localize(), GUILayout.Width(65)))
                 {
-                    this.selectionMode = GUIMode.ExtendFX;
-                    this.textures.Clear();
-                    this.effect = this.property = this.texture = string.Empty;
-                    textureUpdateCallback = null;
+                    SwitchMode(GUIMode.ExtendFX);
                 }
             }
 
             // save current / reload current
-            if (currentMode != GUIMode.SelectTexture && currentMode != GUIMode.EditSpline && currentMode != GUIMode.PerformanceMonitor && currentProfile != null)
+            if (this.selectionMode != GUIMode.SelectTexture && this.selectionMode != GUIMode.EditSpline && this.selectionMode != GUIMode.PerformanceMonitor && currentProfile != null)
             {
                 if (GUILayout.Button("Save Selected".Localize(), GUILayout.Width(100)))
                 {
@@ -149,7 +162,7 @@ namespace TUFX
                 }
             }
 
-            if (currentMode == GUIMode.SelectProfile)
+            if (this.selectionMode == GUIMode.SelectProfile)
             {
                 if (GUILayout.Button("Save All".Localize(), GUILayout.Width(75)))
                 {
@@ -362,7 +375,7 @@ namespace TUFX
             GUI.color = new Color(0.3f, 0.9f, 1.0f);
             if (GUILayout.Button("Open ExtendFX Suite (FSR, AgX/ACES, GTAO, SSR) >>".Localize(), GUILayout.Width(350)))
             {
-                this.selectionMode = GUIMode.ExtendFX;
+                SwitchMode(GUIMode.ExtendFX);
             }
             GUI.color = prev;
             GUILayout.EndHorizontal();
@@ -400,7 +413,7 @@ namespace TUFX
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("<< Switch to Stock FX".Localize(), GUILayout.Width(170)))
             {
-                this.selectionMode = GUIMode.EditProfile;
+                SwitchMode(GUIMode.EditProfile);
             }
             GUILayout.EndHorizontal();
 
@@ -886,9 +899,26 @@ namespace TUFX
                 GUILayout.BeginVertical(HighLogic.Skin.box);
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("<b>SMAA Quality Preset:</b>".Localize(), GUILayout.Width(150));
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Low, "Low".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Low; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Medium, "Medium".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Medium; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.High, "High (Ultra)".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                var q = profile.SMAAQuality;
+                bool isLow = (q == SubpixelMorphologicalAntialiasing.Quality.Low);
+                bool isMed = (q == SubpixelMorphologicalAntialiasing.Quality.Medium);
+                bool isHigh = (q == SubpixelMorphologicalAntialiasing.Quality.High);
+
+                if (GUILayout.Toggle(isLow, "Low".Localize(), GUI.skin.button) && !isLow)
+                {
+                    profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Low;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                if (GUILayout.Toggle(isMed, "Medium".Localize(), GUI.skin.button) && !isMed)
+                {
+                    profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Medium;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                if (GUILayout.Toggle(isHigh, "High (Ultra)".Localize(), GUI.skin.button) && !isHigh)
+                {
+                    profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
             }
