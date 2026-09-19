@@ -73,19 +73,27 @@ Shader "Hidden/TUFX/ContactShadows"
             float3 rayDir = normalize(_LightDirView);
             float NdotL = dot(normal, rayDir);
 
-            // Fade smoothly when surface faces away from sunlight
-            if (NdotL <= 0.0)
+            // Smooth transition at terminator: eliminates razor-sharp cutoff line on curved cylinders
+            float lightFacing = smoothstep(0.0, 0.20, NdotL);
+            if (lightFacing <= 0.0001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
-            float lightFacing = saturate(NdotL * 4.0);
 
-            // Adaptive distance scaling: micro-shadows close up, meters-scale shadows at distance
-            float adaptiveThickness = max(_Thickness, linearDepth * 0.008);
-            float adaptiveRayLength = max(_RayLength, linearDepth * 0.02);
+            // Distance fadeout: contact shadows are micro-details, smoothly fade beyond 300m
+            float distFade = saturate((300.0 - linearDepth) / 80.0);
+            if (distFade <= 0.001)
+            {
+                return float4(1.0, 1.0, 1.0, 1.0);
+            }
 
-            // Normal bias to push ray origin out of surface self-intersection
-            float normalBias = max(0.003, adaptiveThickness * 0.12);
+            // Contact shadows strictly capture micro-geometry gaps (panel seams, decouplers, landing pads).
+            // Ray length is strictly capped to 0.25m so grazing rays NEVER cross and penetrate curved rocket hulls!
+            float adaptiveThickness = clamp(max(_Thickness, linearDepth * 0.001), 0.01, 0.08);
+            float adaptiveRayLength = clamp(max(_RayLength, linearDepth * 0.003), 0.03, 0.25);
+
+            // Generous normal bias to lift ray origin reliably above curved cylinder geometry
+            float normalBias = max(0.008, adaptiveThickness * 0.25);
             float3 originPos = centerPos + normal * normalBias;
 
             // March towards light source in view space
@@ -117,8 +125,7 @@ Shader "Hidden/TUFX/ContactShadows"
             float invZ_start = 1.0 / originPos.z;
             float invZ_end   = 1.0 / endPos.z;
 
-            // Bias is strictly a fraction of adaptive thickness (always guaranteed to be < adaptiveThickness)
-            float bias = adaptiveThickness * 0.10 + 0.001;
+            float bias = adaptiveThickness * 0.15 + 0.002;
             float occlusion = 0.0;
 
             [unroll(16)]
@@ -150,7 +157,7 @@ Shader "Hidden/TUFX/ContactShadows"
                 }
             }
 
-            occlusion *= pixelWeight;
+            occlusion *= pixelWeight * distFade;
             float shadow = 1.0 - occlusion * _Intensity * lightFacing;
             return float4(shadow, shadow, shadow, 1.0);
         }

@@ -5,8 +5,8 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         #include "Packages/com.unity.postprocessing/PostProcessing/Shaders/Colors.hlsl"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
+        TEXTURE2D_SAMPLER2D(_FlareBaseTex, sampler_FlareBaseTex);
         TEXTURE2D_SAMPLER2D(_FlareStreakTex, sampler_FlareStreakTex);
-        TEXTURE2D_SAMPLER2D(_FlareStreakWideTex, sampler_FlareStreakWideTex);
         TEXTURE2D_SAMPLER2D(_FlareSpikesTex, sampler_FlareSpikesTex);
         TEXTURE2D_SAMPLER2D(_FlareGhostTex, sampler_FlareGhostTex);
 
@@ -15,6 +15,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         float4 _FlareParams;     // x: maxBrightness, y: streakLength, z: dispersion, w: unused
 
         float _StreakIntensity;
+        float _StreakSpread;
         float4 _StreakColor;
         float _GhostIntensity;
         float _GhostSpread;
@@ -22,7 +23,6 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         float _SpikeIntensity;
         int _SpikeCount;
         float _SpikeLength;
-        float _BlurStep;
 
         // Jimenez's Interleaved Gradient Noise for continuous ray jittering
         float InterleavedGradientNoise(float2 pixCoord)
@@ -35,20 +35,17 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         float4 FragThreshold(VaryingsDefault i) : SV_Target
         {
             float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            // Clamp max brightness to prevent blinding specular blowout on metallic surfaces
             color.rgb = min(_FlareParams.x, color.rgb);
-            // Quadratic soft-knee thresholding (smooth transition, no hard specular cutoff)
             color = QuadraticThreshold(color, _ThresholdParams.x, _ThresholdParams.yzw);
             return float4(SafeHDR(color).rgb, 1.0);
         }
 
-        // Pass 1: Horizontal Pre-filter with Spectral Dispersion (9-tap normalized Gaussian)
+        // Pass 1: Horizontal Pre-filter with Spectral Dispersion (creates brilliant core)
         float4 FragStreakPreFilter(VaryingsDefault i) : SV_Target
         {
-            // Gaussian weights for 9 taps (normalized sum = 1.0)
             static const float weights[5] = { 0.2270270, 0.1945946, 0.1216216, 0.0540541, 0.0162162 };
-            float disp = _FlareParams.z * 0.35;
-            float baseStep = _MainTex_TexelSize.x * 1.5;
+            float disp = _FlareParams.z * 0.45;
+            float baseStep = _MainTex_TexelSize.x * 2.0;
 
             float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
 
@@ -77,28 +74,35 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             return float4(col, 1.0);
         }
 
-        // Pass 2: Cascaded 1D Horizontal Gaussian Blur (Seamless convolution)
-        float4 FragHorizontalBlur(VaryingsDefault i) : SV_Target
+        // Pass 2: Horizontal 5-tap Gaussian Downsample (halves horizontal resolution)
+        float4 FragHorizontalDownsample(VaryingsDefault i) : SV_Target
         {
-            static const float weights[5] = { 0.2270270, 0.1945946, 0.1216216, 0.0540541, 0.0162162 };
-            float stepX = _MainTex_TexelSize.x * _BlurStep;
+            float dx = _MainTex_TexelSize.x;
+            float3 c0 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(dx * 2.0, 0.0)).rgb;
+            float3 c1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(dx * 1.0, 0.0)).rgb;
+            float3 c2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb;
+            float3 c3 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(dx * 1.0, 0.0)).rgb;
+            float3 c4 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(dx * 2.0, 0.0)).rgb;
 
-            float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
-
-            [unroll]
-            for (int t = 1; t <= 4; t++)
-            {
-                float w = weights[t];
-                float offset = float(t) * stepX;
-                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(offset, 0.0)).rgb;
-                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(offset, 0.0)).rgb;
-                col += (s1 + s2) * w;
-            }
-
-            return float4(col, 1.0);
+            float3 blurred = (c0 + c4) * 0.0625 + (c1 + c3) * 0.25 + c2 * 0.375;
+            return float4(blurred, 1.0);
         }
 
-        // Pass 3: Diffraction Spikes with IGN continuous ray jitter
+        // Pass 3: Horizontal Upsample & Additive Accumulation
+        float4 FragHorizontalUpsampleCombine(VaryingsDefault i) : SV_Target
+        {
+            float dx = _MainTex_TexelSize.x;
+            // 3-tap tent upsample from lower mip
+            float3 upsampled = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(dx * 0.5, 0.0)).rgb * 0.25
+                             + SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * 0.50
+                             + SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(dx * 0.5, 0.0)).rgb * 0.25;
+
+            // Additive combination with current mip level
+            float3 baseCol = SAMPLE_TEXTURE2D(_FlareBaseTex, sampler_FlareBaseTex, i.texcoord).rgb;
+            return float4(baseCol + upsampled * _StreakSpread, 1.0);
+        }
+
+        // Pass 4: Continuous Starburst Spikes with IGN ray jitter
         float4 FragSpikes(VaryingsDefault i) : SV_Target
         {
             float3 sum = float3(0, 0, 0);
@@ -110,30 +114,28 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             for (int s = 0; s < count; s++)
             {
                 float theta = float(s) * angleStep;
-                float2 dir = float2(cos(theta), sin(theta)) * _MainTex_TexelSize.xy * _SpikeLength * 1.5;
+                float2 dir = float2(cos(theta), sin(theta)) * _MainTex_TexelSize.xy * _SpikeLength * 1.2;
 
                 [unroll]
                 for (int tap = 1; tap <= 12; tap++)
                 {
-                    // Continuous jittered sample distance avoids discrete stepping beads
                     float t = float(tap) + jitter - 0.5;
-                    float weight = exp(-float(tap) * 0.25);
+                    float weight = exp(-float(tap) * 0.28);
                     sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + dir * t).rgb * weight;
                     sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - dir * t).rgb * weight;
                 }
             }
 
-            return float4(sum * (_SpikeIntensity * 0.06), 1.0);
+            return float4(sum * (_SpikeIntensity * 0.07), 1.0);
         }
 
-        // Pass 4: Defocused Optical Lens Ghosts with 8-Tap Fibonacci Aperture Disk & Chromatic Rim
+        // Pass 5: Defocused Lens Ghosts with 8-Tap Fibonacci Aperture Disk & Chromatic Rim
         float4 FragGhosts(VaryingsDefault i) : SV_Target
         {
             float2 center = float2(0.5, 0.5);
             float2 toCenter = center - i.texcoord;
             float3 ghostCol = float3(0, 0, 0);
 
-            // 8-Tap Fibonacci spiral aperture bokeh kernel
             static const float2 kApertureDisc[8] = {
                 float2( 0.000,  0.000),
                 float2( 0.528,  0.412),
@@ -147,7 +149,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
 
             const float ghostScales[4] = { -0.5, 0.35, -0.85, 1.25 };
             const float ghostWeights[4] = { 0.6, 0.8, 0.4, 0.3 };
-            const float ghostDefocus[4] = { 18.0, 12.0, 24.0, 8.0 }; // Aperture bokeh radius in texels
+            const float ghostDefocus[4] = { 18.0, 12.0, 24.0, 8.0 };
 
             for (int g = 0; g < 4; g++)
             {
@@ -165,7 +167,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
                     float b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV - dispOffset).b;
                     ghostDiscAcc += float3(r, g, b);
                 }
-                ghostDiscAcc *= 0.125; // Average over aperture disk to dissolve sharp object silhouettes
+                ghostDiscAcc *= 0.125;
 
                 float distToCenter = length(ghostCenterUV - center);
                 float vignette = saturate(1.0 - distToCenter * 1.2);
@@ -189,15 +191,11 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             return float4(ghostCol * (_GhostIntensity * _GhostColor.rgb), 1.0);
         }
 
-        // Pass 5: Final Composite with Original Scene
+        // Pass 6: Final Composite
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
             float4 orig = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            // Combine tight core streak and wide anamorphic streak
-            float3 streakCore = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_FlareStreakTex, i.texcoord).rgb;
-            float3 streakWide = SAMPLE_TEXTURE2D(_FlareStreakWideTex, sampler_FlareStreakWideTex, i.texcoord).rgb;
-            float3 streak = (streakCore * 0.6 + streakWide * 0.7) * (_StreakIntensity * _StreakColor.rgb);
-
+            float3 streak = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_FlareStreakTex, i.texcoord).rgb * (_StreakIntensity * _StreakColor.rgb);
             float3 spikes = SAMPLE_TEXTURE2D(_FlareSpikesTex, sampler_FlareSpikesTex, i.texcoord).rgb;
             float3 ghosts = SAMPLE_TEXTURE2D(_FlareGhostTex, sampler_FlareGhostTex, i.texcoord).rgb;
 
@@ -228,16 +226,25 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             ENDHLSL
         }
 
-        // 2: Horizontal Blur Convolution
+        // 2: Horizontal 5-tap Gaussian Downsample
         Pass
         {
             HLSLPROGRAM
                 #pragma vertex VertDefault
-                #pragma fragment FragHorizontalBlur
+                #pragma fragment FragHorizontalDownsample
             ENDHLSL
         }
 
-        // 3: Continuous Starburst Spikes
+        // 3: Horizontal Upsample & Combine
+        Pass
+        {
+            HLSLPROGRAM
+                #pragma vertex VertDefault
+                #pragma fragment FragHorizontalUpsampleCombine
+            ENDHLSL
+        }
+
+        // 4: Continuous Starburst Spikes
         Pass
         {
             HLSLPROGRAM
@@ -246,7 +253,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             ENDHLSL
         }
 
-        // 4: Defocused Lens Ghosts & Halo
+        // 5: Defocused Lens Ghosts & Halo
         Pass
         {
             HLSLPROGRAM
@@ -255,7 +262,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             ENDHLSL
         }
 
-        // 5: Composite
+        // 6: Composite
         Pass
         {
             HLSLPROGRAM

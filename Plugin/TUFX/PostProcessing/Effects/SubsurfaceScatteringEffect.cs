@@ -11,10 +11,13 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter intensity = new FloatParameter { value = 0.75f };
 
         [Range(0.5f, 15f), Tooltip("Diffusion scatter radius.")]
-        public FloatParameter scatterRadius = new FloatParameter { value = 5.0f };
+        public FloatParameter scatterRadius = new FloatParameter { value = 4.0f };
 
-        [Range(0.01f, 1f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
-        public FloatParameter depthThreshold = new FloatParameter { value = 0.2f };
+        [Range(0.01f, 0.5f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
+        public FloatParameter depthThreshold = new FloatParameter { value = 0.08f };
+
+        [Range(2f, 50f), Tooltip("Maximum distance (meters) for SSSS to activate. Beyond this range, full scene sharpness is preserved.")]
+        public FloatParameter maxDistance = new FloatParameter { value = 15.0f };
 
         [Tooltip("Subsurface scatter tint color (e.g. warm peach for skin/EVA, or cool cyan for polar ice).")]
         public ColorParameter subsurfaceColor = new ColorParameter { value = new Color(1.0f, 0.85f, 0.75f, 1.0f) };
@@ -29,6 +32,7 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "ScatterRadius", scatterRadius);
             loadFloatParameter(config, "DepthThreshold", depthThreshold);
+            loadFloatParameter(config, "MaxDistance", maxDistance);
             loadColorParameter(config, "SubsurfaceColor", subsurfaceColor);
         }
 
@@ -37,6 +41,7 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "ScatterRadius", scatterRadius);
             saveFloatParameter(config, "DepthThreshold", depthThreshold);
+            saveFloatParameter(config, "MaxDistance", maxDistance);
             saveColorParameter(config, "SubsurfaceColor", subsurfaceColor);
         }
     }
@@ -58,8 +63,8 @@ namespace UnityEngine.Rendering.PostProcessing
                 return;
             }
 
-            var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null) 
-                ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/SubsurfaceScattering") 
+            var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null)
+                ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/SubsurfaceScattering")
                 : null;
             if (shader == null) shader = Shader.Find("Hidden/TUFX/SubsurfaceScattering");
             if (shader == null)
@@ -72,6 +77,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_ScatterRadius", settings.scatterRadius.value);
             sheet.properties.SetFloat("_DepthThreshold", settings.depthThreshold.value);
+            sheet.properties.SetFloat("_MaxDistance", settings.maxDistance.value);
             sheet.properties.SetColor("_SubsurfaceColor", settings.subsurfaceColor.value);
 
             int width = context.width;
@@ -81,10 +87,10 @@ namespace UnityEngine.Rendering.PostProcessing
             var cmd = context.command;
             cmd.GetTemporaryRT(rtIntermediate, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
 
-            // Pass 0: Horizontal SSSS
+            // Pass 0: Horizontal Blur
             cmd.BlitFullscreenTriangle(context.source, rtIntermediate, sheet, 0);
 
-            // Pass 1: Vertical SSSS & Composite
+            // Pass 1: Vertical Blur & Composite
             cmd.SetGlobalTexture("_SSSSIntermediate", rtIntermediate);
             cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 1);
 

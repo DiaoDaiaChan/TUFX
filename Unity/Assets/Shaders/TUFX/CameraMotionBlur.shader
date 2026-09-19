@@ -82,21 +82,31 @@ Shader "Hidden/TUFX/CameraMotionBlur"
                 velocity = CalculateVelocity(i.texcoord, rawDepth);
             }
 
-            float speed = length(velocity);
+            float speedInPixels = length(velocity * _MainTex_TexelSize.zw);
 
-            // Subpixel early exit
-            if (speed < 0.0002)
+            // Strict deadzone: below 1.5 screen pixels, return 100% crisp raw scene
+            // Completely preserves native sharpness for stationary launchpad or slow orbital flight
+            if (speedInPixels < 1.5)
             {
                 return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             }
 
+            // Smooth transition into motion blur to eliminate popping
+            float blurFade = smoothstep(1.5, 3.5, speedInPixels);
+
             // Clamp max velocity in pixel space
-            float maxUVRadius = _MaxBlurRadius * _MainTex_TexelSize.x;
-            if (speed > maxUVRadius)
+            if (speedInPixels > _MaxBlurRadius)
             {
-                velocity = (velocity / speed) * maxUVRadius;
-                speed = maxUVRadius;
+                velocity = (velocity / speedInPixels) * _MaxBlurRadius;
+                speedInPixels = _MaxBlurRadius;
             }
+
+            #if UNITY_REVERSED_Z
+            bool centerIsSky = (rawDepth <= 0.0001);
+            #else
+            bool centerIsSky = (rawDepth >= 0.9999);
+            #endif
+            float centerDepth = centerIsSky ? 100000.0 : LinearEyeDepth(rawDepth);
 
             float jitter = InterleavedGradientNoise(i.texcoord * _MainTex_TexelSize.zw);
             int samples = clamp(_SampleCount, 4, 16);
@@ -115,13 +125,41 @@ Shader "Hidden/TUFX/CameraMotionBlur"
                 // Border clamp
                 sampleUV = clamp(sampleUV, 0.001, 0.999);
 
+                // Silhouette protection: background rays must NOT sample foreground rocket geometry
+                float tapRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, sampleUV);
+                #if UNITY_REVERSED_Z
+                bool tapIsSky = (tapRawDepth <= 0.0001);
+                #else
+                bool tapIsSky = (tapRawDepth >= 0.9999);
+                #endif
+                float tapDepth = tapIsSky ? 100000.0 : LinearEyeDepth(tapRawDepth);
+
+                float depthWeight = 1.0;
+                if (!centerIsSky && tapDepth < centerDepth * 0.75)
+                {
+                    // Foreground occluder in front of center pixel: reject to prevent dark hull smearing
+                    depthWeight = saturate((tapDepth - centerDepth * 0.4) / max(0.1, centerDepth * 0.35));
+                }
+                else if (centerIsSky && !tapIsSky && tapDepth < 5000.0)
+                {
+                    // Sky background sampling foreground rocket: reject
+                    depthWeight = 0.0;
+                }
+
                 // Triangular weight centered at current pixel
-                float w = 1.0 - abs(t * 2.0);
+                float w = (1.0 - abs(t * 2.0)) * depthWeight;
                 col += SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 0.0) * w;
                 totalWeight += w;
             }
 
-            return col / max(0.0001, totalWeight);
+            float4 original = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+            if (totalWeight <= 0.001)
+            {
+                return original;
+            }
+
+            float4 blurred = col / totalWeight;
+            return lerp(original, blurred, blurFade);
         }
     ENDHLSL
 

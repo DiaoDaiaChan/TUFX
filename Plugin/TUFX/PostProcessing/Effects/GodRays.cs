@@ -10,6 +10,9 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0f, 5f), Tooltip("God rays brightness intensity.")]
         public FloatParameter intensity = new FloatParameter { value = 1.2f };
 
+        [Range(0f, 1f), Tooltip("Residual optical lens corona intensity in vacuum/space (0 = off, 0.45 = crisp space corona).")]
+        public FloatParameter spaceIntensity = new FloatParameter { value = 0.45f };
+
         [Range(0.1f, 2f), Tooltip("Luminance threshold to extract sunlight sources.")]
         public FloatParameter threshold = new FloatParameter { value = 0.65f };
 
@@ -33,6 +36,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public override void Load(ConfigNode config)
         {
             loadFloatParameter(config, "Intensity", intensity);
+            loadFloatParameter(config, "SpaceIntensity", spaceIntensity);
             loadFloatParameter(config, "Threshold", threshold);
             loadFloatParameter(config, "Density", density);
             loadFloatParameter(config, "Decay", decay);
@@ -43,6 +47,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public override void Save(ConfigNode config)
         {
             saveFloatParameter(config, "Intensity", intensity);
+            saveFloatParameter(config, "SpaceIntensity", spaceIntensity);
             saveFloatParameter(config, "Threshold", threshold);
             saveFloatParameter(config, "Density", density);
             saveFloatParameter(config, "Decay", decay);
@@ -103,6 +108,10 @@ namespace UnityEngine.Rendering.PostProcessing
             // Allow sun to be up to 0.75 outside the viewport so rays fan into the screen
             float sunVisible = (vp.z > 0f && vp.x >= -0.75f && vp.x <= 1.75f && vp.y >= -0.75f && vp.y <= 1.75f) ? 1.0f : 0.0f;
 
+            // Auto-adapt intensity based on atmospheric density: dense Tyndall in air, clean optical corona in space
+            double atmDensity = (FlightGlobals.ActiveVessel != null) ? FlightGlobals.ActiveVessel.atmDensity : 0.0;
+            float spaceFactor = Mathf.Lerp(settings.spaceIntensity.value, 1.0f, Mathf.Clamp01((float)atmDensity * 2.0f));
+
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetVector("_SunScreenPos", new Vector2(vp.x, vp.y));
             sheet.properties.SetFloat("_SunVisible", sunVisible);
@@ -110,7 +119,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Density", settings.density.value);
             sheet.properties.SetFloat("_Decay", settings.decay.value);
             sheet.properties.SetFloat("_Weight", settings.weight.value);
-            sheet.properties.SetFloat("_Intensity", settings.intensity.value);
+            sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor);
             sheet.properties.SetColor("_RayColor", settings.rayColor.value);
 
             int width = context.width / 2;

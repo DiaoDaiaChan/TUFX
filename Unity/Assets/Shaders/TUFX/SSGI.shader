@@ -81,7 +81,7 @@ Shader "Hidden/TUFX/SSGI"
             b = cross(n, t);
         }
 
-        // Pass 0: Half-Resolution Raymarching Pass
+        // Pass 0: Half-Resolution Raymarching Pass with Firefly Suppression
         float4 FragSSGIRaymarch(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
@@ -92,7 +92,7 @@ Shader "Hidden/TUFX/SSGI"
             #endif
 
             float viewZ = LinearEyeDepth(rawDepth);
-            if (viewZ <= 0.05 || viewZ > 5000.0) return float4(0, 0, 0, 0);
+            if (viewZ <= 0.05 || viewZ > 3000.0) return float4(0, 0, 0, 0);
 
             float3 viewPos = ComputeViewspacePosition(i.texcoord, viewZ);
             float3 viewNorm;
@@ -126,7 +126,6 @@ Shader "Hidden/TUFX/SSGI"
             float stepSize = _RayLength / float(raySteps);
 
             float3 accumulatedLight = float3(0, 0, 0);
-            float validSamples = 0.0;
 
             [unroll(8)]
             for (int r = 0; r < 8; r++)
@@ -166,13 +165,16 @@ Shader "Hidden/TUFX/SSGI"
                         // Ray hit geometry! Sample irradiance from hit position
                         float3 hitColor = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 1.0).rgb;
 
+                        // Anti-Firefly Clamping: Indirect diffuse bounce cannot exceed 1.8 luminance.
+                        // Completely kills flickering specular white glints on rocket grids!
+                        hitColor = min(hitColor, 1.8);
+
                         // Edge fade and distance falloff
                         float2 edgeDist = abs(sampleUV - 0.5) * 2.0;
                         float edgeFade = saturate(1.0 - max(edgeDist.x, edgeDist.y));
                         float distFalloff = saturate(1.0 - t / _RayLength);
 
                         accumulatedLight += hitColor * (edgeFade * distFalloff);
-                        validSamples += 1.0;
                         break;
                     }
                 }
@@ -182,7 +184,7 @@ Shader "Hidden/TUFX/SSGI"
             return float4(saturate(indirect), 1.0);
         }
 
-        // Pass 1: Edge-Preserving Bilateral Denoise & Upsample
+        // Pass 1: Edge-Preserving Bilateral Denoise with Cross-Filter
         float4 FragSSGIDenoise(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
@@ -197,7 +199,7 @@ Shader "Hidden/TUFX/SSGI"
 
             float3 sum = centerSample.rgb;
             float totalWeight = 1.0;
-            float2 texel = _MainTex_TexelSize.xy * 2.0;
+            float2 texel = _MainTex_TexelSize.xy * 1.75;
 
             const float2 offsets[8] = {
                 float2( 1.0,  0.0), float2(-1.0,  0.0),
@@ -213,7 +215,7 @@ Shader "Hidden/TUFX/SSGI"
                 float tapDepth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv));
                 float depthDiff = abs(centerDepth - tapDepth);
 
-                float weight = exp(-depthDiff / max(0.05, centerDepth * 0.03)) * (k < 4 ? 1.0 : 0.7);
+                float weight = exp(-depthDiff / max(0.04, centerDepth * 0.03)) * (k < 4 ? 1.0 : 0.6);
                 float4 tapCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
 
                 sum += tapCol.rgb * weight;
@@ -248,10 +250,9 @@ Shader "Hidden/TUFX/SSGI"
                 albedo = saturate(scene.rgb * 1.2);
             }
 
-            float3 bounce = indirect * (albedo * 0.7 + 0.3) * (_Intensity * _BounceColor.rgb * 1.8);
+            float3 bounce = indirect * (albedo * 0.7 + 0.3) * (_Intensity * _BounceColor.rgb);
             return float4(scene.rgb + bounce, scene.a);
         }
-
     ENDHLSL
 
     SubShader

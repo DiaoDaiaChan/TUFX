@@ -6,8 +6,8 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(ContactShadowsRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space Contact Shadows", sortingPriority: 30)]
     public sealed class ContactShadows : PostProcessEffectSettings
     {
-        [Range(0.05f, 3f), Tooltip("Max length of contact shadow ray in view space.")]
-        public FloatParameter rayLength = new FloatParameter { value = 0.8f };
+        [Range(0.02f, 0.5f), Tooltip("Max length of contact shadow ray in view space.")]
+        public FloatParameter rayLength = new FloatParameter { value = 0.12f };
 
         [Range(4, 16), Tooltip("Number of raymarching steps.")]
         public IntParameter raySteps = new IntParameter { value = 8 };
@@ -15,8 +15,8 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0f, 1f), Tooltip("Contact shadow darkness.")]
         public FloatParameter intensity = new FloatParameter { value = 0.75f };
 
-        [Range(0.02f, 0.6f), Tooltip("Surface thickness test value.")]
-        public FloatParameter thickness = new FloatParameter { value = 0.15f };
+        [Range(0.01f, 0.2f), Tooltip("Surface thickness test value.")]
+        public FloatParameter thickness = new FloatParameter { value = 0.04f };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {

@@ -879,10 +879,10 @@ namespace TUFX
             bool showProps = AddEffectHeader("Contact Shadows", out ContactShadows cs);
             if (showProps)
             {
-                AddFloatParameter("Ray Length", cs.rayLength, 0.05f, 3f);
+                AddFloatParameter("Ray Length", cs.rayLength, 0.02f, 0.5f);
                 AddIntParameter("Steps", cs.raySteps, 4, 16);
                 AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
-                AddFloatParameter("Thickness", cs.thickness, 0.02f, 0.6f);
+                AddFloatParameter("Thickness", cs.thickness, 0.01f, 0.2f);
                 GUILayout.Label("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages and landing gear.</color></size>");
             }
             GUILayout.EndVertical();
@@ -894,12 +894,13 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Intensity", gr.intensity, 0f, 5f);
+                AddFloatParameter("Space Intensity", gr.spaceIntensity, 0f, 1f);
                 AddFloatParameter("Threshold", gr.threshold, 0.1f, 2f);
                 AddFloatParameter("Density", gr.density, 0.1f, 2f);
                 AddFloatParameter("Decay", gr.decay, 0.8f, 0.99f);
                 AddFloatParameter("Weight", gr.weight, 0.05f, 1f);
                 AddColorParameter("Ray Color", gr.rayColor);
-                GUILayout.Label("<size=10><color=grey>Simulates dramatic Tyndall volumetric light shafts and spacecraft shadow rays in backlight angles.</color></size>");
+                GUILayout.Label("<size=10><color=grey>Simulates dramatic Tyndall volumetric light shafts in atmosphere, and crisp optical lens corona in vacuum.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -1033,10 +1034,11 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Intensity", ssss.intensity, 0f, 1f);
+                AddFloatParameter("Max Distance (m)", ssss.maxDistance, 2f, 50f);
                 AddFloatParameter("Scatter Radius", ssss.scatterRadius, 0.5f, 15f);
                 AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 1f);
                 AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
-                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency and icy celestial body jade-like subsurface glow.</color></size>");
+                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Automatically cuts off beyond Max Distance to keep launchpad and terrain razor-sharp.</color></size>");
             }
             GUILayout.EndVertical();
         }

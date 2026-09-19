@@ -88,6 +88,19 @@ namespace UnityEngine.Rendering.PostProcessing
     [UnityEngine.Scripting.Preserve]
     internal sealed class AnamorphicFlareRenderer : PostProcessEffectRenderer<AnamorphicFlare>
     {
+        private const int k_MaxPyramidLevels = 5;
+        private readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
+        private readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
+
+        public override void Init()
+        {
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                m_MipsDown[k] = Shader.PropertyToID("_FlareMipDown_" + k);
+                m_MipsUp[k] = Shader.PropertyToID("_FlareMipUp_" + k);
+            }
+        }
+
         public override void Render(PostProcessRenderContext context)
         {
             var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null) ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/AnamorphicFlare") : null;
@@ -124,59 +137,100 @@ namespace UnityEngine.Rendering.PostProcessing
             int hStreak = Mathf.Max(1, context.height / 4);
 
             int rtThresh = Shader.PropertyToID("_FlareThreshold");
-            int rtStreakCore = Shader.PropertyToID("_FlareStreakCore");
-            int rtStreakPing = Shader.PropertyToID("_FlareStreakPing");
-            int rtStreakPong = Shader.PropertyToID("_FlareStreakPong");
             int rtSpikes = Shader.PropertyToID("_FlareSpikesTex");
             int rtGhosts = Shader.PropertyToID("_FlareGhostTex");
 
             var cmd = context.command;
             cmd.GetTemporaryRT(rtThresh, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtStreakCore, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtStreakPing, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtStreakPong, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtSpikes, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtGhosts, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
 
             // Pass 0: Soft-Knee Threshold Extraction & Anti-Blowout Clamp
             cmd.BlitFullscreenTriangle(context.source, rtThresh, sheet, 0);
 
-            // Pass 1: Horizontal Streak Pre-filter with Spectral Dispersion (creates brilliant tight core)
-            cmd.BlitFullscreenTriangle(rtThresh, rtStreakCore, sheet, 1);
+            // Horizontal Mip Pyramid for continuous, gapless Anamorphic Streaks
+            bool hasStreak = settings.streakIntensity.value > 0f;
+            if (hasStreak)
+            {
+                int tw = width;
+                for (int k = 0; k < k_MaxPyramidLevels; k++)
+                {
+                    cmd.GetTemporaryRT(m_MipsDown[k], tw, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
+                    cmd.GetTemporaryRT(m_MipsUp[k], tw, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
+                    tw = Mathf.Max(1, tw / 2);
+                }
 
-            // Pass 2: Cascaded Ping-Pong Horizontal Gaussian Convolution (creates ultra-wide continuous streak)
-            float sLen = Mathf.Max(0.5f, settings.streakLength.value);
-            sheet.properties.SetFloat("_BlurStep", 3.0f * sLen);
-            cmd.BlitFullscreenTriangle(rtStreakCore, rtStreakPing, sheet, 2);
+                // Pass 1: Horizontal Streak Pre-filter with Spectral Dispersion
+                cmd.BlitFullscreenTriangle(rtThresh, m_MipsDown[0], sheet, 1);
 
-            sheet.properties.SetFloat("_BlurStep", 10.0f * sLen);
-            cmd.BlitFullscreenTriangle(rtStreakPing, rtStreakPong, sheet, 2);
+                // Pass 2: Horizontal 5-Tap Gaussian Downsampling
+                for (int k = 1; k < k_MaxPyramidLevels; k++)
+                {
+                    cmd.BlitFullscreenTriangle(m_MipsDown[k - 1], m_MipsDown[k], sheet, 2);
+                }
 
-            sheet.properties.SetFloat("_BlurStep", 32.0f * sLen);
-            cmd.BlitFullscreenTriangle(rtStreakPong, rtStreakPing, sheet, 2);
+                // Pass 3: Horizontal Upsample & Additive Accumulation
+                float streakSpread = Mathf.Clamp(0.55f + settings.streakLength.value * 0.04f, 0.5f, 0.95f);
+                sheet.properties.SetFloat("_StreakSpread", streakSpread);
 
-            sheet.properties.SetFloat("_BlurStep", 90.0f * sLen);
-            cmd.BlitFullscreenTriangle(rtStreakPing, rtStreakPong, sheet, 2);
+                int lastUp = m_MipsDown[k_MaxPyramidLevels - 1];
+                for (int k = k_MaxPyramidLevels - 2; k >= 0; k--)
+                {
+                    cmd.SetGlobalTexture("_FlareBaseTex", m_MipsDown[k]);
+                    cmd.BlitFullscreenTriangle(lastUp, m_MipsUp[k], sheet, 3);
+                    lastUp = m_MipsUp[k];
+                }
 
-            // Pass 3: Diffraction Spikes (Continuous Starburst with IGN jitter)
-            cmd.BlitFullscreenTriangle(rtThresh, rtSpikes, sheet, 3);
+                cmd.SetGlobalTexture("_FlareStreakTex", lastUp);
+            }
+            else
+            {
+                cmd.SetGlobalTexture("_FlareStreakTex", RuntimeUtilities.blackTexture);
+            }
 
-            // Pass 4: Lens Ghosts (Aperture Bokeh Defocus with 8-Tap Fibonacci Disk)
-            cmd.BlitFullscreenTriangle(rtThresh, rtGhosts, sheet, 4);
+            // Pass 4: Diffraction Spikes (Continuous Starburst with IGN jitter)
+            if (settings.spikeIntensity.value > 0f)
+            {
+                cmd.GetTemporaryRT(rtSpikes, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
+                cmd.BlitFullscreenTriangle(rtThresh, rtSpikes, sheet, 4);
+                cmd.SetGlobalTexture("_FlareSpikesTex", rtSpikes);
+            }
+            else
+            {
+                cmd.SetGlobalTexture("_FlareSpikesTex", RuntimeUtilities.blackTexture);
+            }
 
-            // Pass 5: Composite with Scene
-            cmd.SetGlobalTexture("_FlareStreakTex", rtStreakCore);
-            cmd.SetGlobalTexture("_FlareStreakWideTex", rtStreakPong);
-            cmd.SetGlobalTexture("_FlareSpikesTex", rtSpikes);
-            cmd.SetGlobalTexture("_FlareGhostTex", rtGhosts);
-            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 5);
+            // Pass 5: Lens Ghosts (Aperture Bokeh Defocus with 8-Tap Fibonacci Disk)
+            if (settings.ghostIntensity.value > 0f)
+            {
+                cmd.GetTemporaryRT(rtGhosts, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
+                cmd.BlitFullscreenTriangle(rtThresh, rtGhosts, sheet, 5);
+                cmd.SetGlobalTexture("_FlareGhostTex", rtGhosts);
+            }
+            else
+            {
+                cmd.SetGlobalTexture("_FlareGhostTex", RuntimeUtilities.blackTexture);
+            }
 
+            // Pass 6: Final Composite with Scene
+            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 6);
+
+            // Cleanup
             cmd.ReleaseTemporaryRT(rtThresh);
-            cmd.ReleaseTemporaryRT(rtStreakCore);
-            cmd.ReleaseTemporaryRT(rtStreakPing);
-            cmd.ReleaseTemporaryRT(rtStreakPong);
-            cmd.ReleaseTemporaryRT(rtSpikes);
-            cmd.ReleaseTemporaryRT(rtGhosts);
+            if (hasStreak)
+            {
+                for (int k = 0; k < k_MaxPyramidLevels; k++)
+                {
+                    cmd.ReleaseTemporaryRT(m_MipsDown[k]);
+                    cmd.ReleaseTemporaryRT(m_MipsUp[k]);
+                }
+            }
+            if (settings.spikeIntensity.value > 0f)
+            {
+                cmd.ReleaseTemporaryRT(rtSpikes);
+            }
+            if (settings.ghostIntensity.value > 0f)
+            {
+                cmd.ReleaseTemporaryRT(rtGhosts);
+            }
         }
     }
 }
