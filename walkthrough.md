@@ -58,11 +58,18 @@
 
 ---
 
-### 7. 可分离屏幕空间次表面散射 (Separable SSSS)
+### 7. 距离自适应屏幕空间次表面散射 (Distance-Adaptive Separable SSSS)
 - **文件**：[`SubsurfaceScattering.shader`](file:///c:/Users/43701/Documents/github/TUFX/Unity/Assets/Shaders/TUFX/SubsurfaceScattering.shader), [`SubsurfaceScatteringEffect.cs`](file:///c:/Users/43701/Documents/github/TUFX/Plugin/TUFX/PostProcessing/Effects/SubsurfaceScatteringEffect.cs)
-- **技术原理**：
-  - 基于 Jimenez 6-Tap 可分离柯西/双边高斯核，水平与垂直分离两 Pass 扩散漫反射光线。
-  - 引入双边深度不连续性权重杜绝前景与背景边缘溢色，为坎巴拉宇航员 EVA 皮肤带来通透微红的生物质感，并使 Minmus 冰湖及 Vall 冰层呈现宛如玉石般的次表面微光。
+- **问题根因定位 (效果消失原因)**：
+  1. **极小距离硬截断**：原着色器在深度超过 `_MaxDistance` (原默认仅 25.0 米) 时直接返回原图。在 KSP 航天飞行、火箭升空或中远景观察载具时（视距通常 50m~250m），SSSS 处于 100% 彻底关闭状态。
+  2. **亚像素采样核坍缩**：原核半径按纯物理 $1/d$ 比例收缩，在 20m 视距外采样半径仅 0.2~0.3 像素，扩散完全不可察。
+  3. **固定深度阈值在远景失真**：原双边滤波阈值固定为 8 厘米（0.08m）。在 50m~100m 观察圆柱形火箭储箱时，透视曲率导致的深度差轻易突破 8cm，双边权重直接归零，导致扩散核在载具表面被完全过滤。
+  4. **低饱和度表面削减惩罚**：原着色器对低饱和度表面衰减 65% 强度，导致白色/金属质感航天器蒙皮上几乎无效果。
+- **技术升级与修复**：
+  - **动态视距自适应核半径**：引入 `clamp((_ScatterRadius * 6.5) / max(1.0, centerDepth * 0.12), 2.0, 24.0)`，保证近距离 EVA 呈现细腻有机次表面柔光的同时，在中远视距下仍维持至少 2.0 像素的有效柔化足迹。
+  - **透视深度自适应双边阈值**：`depthTol = max(0.03, _DepthThreshold * max(1.0, centerDepth * 0.05))`，随视距动态拉伸深度容差，允许扩散核在火箭弧形储箱与机翼曲面上完整扩散，同时对背景天空与远景保持锐利边缘隔离。
+  - **色差防逆转明暗扩散**：将扩散量分离为正向受光渗透 `max(0.0, diff) * tintColor` 与负向高光收敛 `min(0.0, diff)`，既保证阴影明暗交界线呈现生物/材质透光微光，又杜绝亮部产生色相倒转与偏色伪影。
+  - **视距上限扩展**：默认最大生效距离由 25m 大幅提升至 350m（UI 支持滑动至 1000m），末端 25% 距离平滑淡出，彻底激活全飞行阶段的次表面透光与高光边缘柔化质感。
 
 ---
 
