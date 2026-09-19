@@ -140,16 +140,66 @@ namespace UnityEngine.Rendering.PostProcessing
         /// </summary>
         /// <param name="context">The current post-processing render context</param>
         /// <returns><c>true</c> if the effect is currently enabled and supported</returns>
+        public static bool s_HasLoggedSupport = false;
+
+        public static bool CheckSupport(PostProcessRenderContext context, out string reason)
+        {
+            if (context?.camera == null)
+            {
+                reason = "Camera is null";
+                return false;
+            }
+            if (context.camera.actualRenderingPath != RenderingPath.DeferredShading)
+            {
+                reason = $"Camera path is {context.camera.actualRenderingPath}, requires DeferredShading (install Blackrack's Deferred mod)";
+                return false;
+            }
+            if (!SystemInfo.supportsMotionVectors)
+            {
+                reason = "Hardware does not support motion vectors";
+                return false;
+            }
+            if (!SystemInfo.supportsComputeShaders)
+            {
+                reason = "Hardware does not support compute shaders";
+                return false;
+            }
+            if (SystemInfo.copyTextureSupport == CopyTextureSupport.None)
+            {
+                reason = "Hardware copyTextureSupport is None";
+                return false;
+            }
+            if (context.resources?.shaders?.screenSpaceReflections == null || !context.resources.shaders.screenSpaceReflections.isSupported)
+            {
+                reason = "SSR shader missing or not supported on this graphics device";
+                return false;
+            }
+            if (context.resources?.computeShaders?.gaussianDownsample == null)
+            {
+                reason = "Gaussian downsample compute shader missing";
+                return false;
+            }
+
+            reason = "Supported";
+            return true;
+        }
+
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
-            return enabled
-                && context.camera.actualRenderingPath == RenderingPath.DeferredShading
-                && SystemInfo.supportsMotionVectors
-                && SystemInfo.supportsComputeShaders
-                && SystemInfo.copyTextureSupport > CopyTextureSupport.None
-                && context.resources.shaders.screenSpaceReflections
-                && context.resources.shaders.screenSpaceReflections.isSupported
-                && context.resources.computeShaders.gaussianDownsample;
+            bool supported = CheckSupport(context, out string reason);
+            if (enabled.value && !s_HasLoggedSupport)
+            {
+                s_HasLoggedSupport = true;
+                if (supported)
+                {
+                    TUFX.Log.log($"[TUFX SSR] Enabled and supported on camera '{context?.camera?.name}' with Deferred shading pipeline.");
+                }
+                else
+                {
+                    TUFX.Log.log($"[TUFX SSR] Enabled in profile but inactive on camera '{context?.camera?.name}': {reason}");
+                }
+            }
+            return enabled.value && supported;
         }
 
         public override void Load(ConfigNode config)

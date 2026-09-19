@@ -669,12 +669,16 @@ namespace TUFX
             if (showProps)
             {
                 bool isDeferred = (Camera.main != null && Camera.main.actualRenderingPath == RenderingPath.DeferredShading);
-                if (!isDeferred)
+                bool hasDeferredMod = AssemblyLoader.loadedAssemblies != null && AssemblyLoader.loadedAssemblies.Any(a => a.name.Equals("Deferred", StringComparison.OrdinalIgnoreCase) || a.assembly.GetName().Name.Equals("Deferred", StringComparison.OrdinalIgnoreCase));
+                
+                GUILayout.BeginVertical(HighLogic.Skin.box);
+                GUILayout.Label($"[SSR Pipeline] Status: {(isDeferred ? "Deferred Active (Full SSR)" : "Forward Mode (Inactive - Requires Deferred mod)")}");
+                GUILayout.Label($"Deferred Mod: {(hasDeferredMod ? "Detected" : "Not Detected")}, Camera: {(Camera.main != null ? Camera.main.actualRenderingPath.ToString() : "N/A")}");
+                if (GUILayout.Button("Print SSR Diagnostics to KSP.log", GUILayout.Width(260)))
                 {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label("Status: Forward Rendering (Requires Deferred mod for full SSR)", GUILayout.Width(450));
-                    GUILayout.EndHorizontal();
+                    Log.log($"[TUFX SSR Diagnostics] Camera: {Camera.main?.name}, Path: {Camera.main?.actualRenderingPath}, DeferredMod: {hasDeferredMod}, MotionVectors: {SystemInfo.supportsMotionVectors}, ComputeShaders: {SystemInfo.supportsComputeShaders}, CopyTexture: {SystemInfo.copyTextureSupport}");
                 }
+                GUILayout.EndVertical();
                 AddEnumParameter("Preset", ssr.preset);
                 AddIntParameter("Max Iterations", ssr.maximumIterationCount, 4, 128);
                 AddEnumParameter("Resolution", ssr.resolution);

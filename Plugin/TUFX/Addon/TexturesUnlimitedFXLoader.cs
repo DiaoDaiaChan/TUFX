@@ -86,6 +86,7 @@ namespace TUFX
             MonoBehaviour.print("TUFXLoader - Start()");
             INSTANCE = this;
             DontDestroyOnLoad(this);
+            detectDeferredPipeline();
             GameEvents.onLevelWasLoaded.Add(new EventData<GameScenes>.OnEvent(onLevelLoaded));
             GameEvents.OnCameraChange.Add(new EventData<CameraManager.CameraMode>.OnEvent(cameraChange));
 
@@ -143,6 +144,19 @@ namespace TUFX
             if (HighLogic.LoadedScene == GameScenes.SPACECENTER)
             {
                 enableProfileForCurrentScene();
+            }
+        }
+
+        private void detectDeferredPipeline()
+        {
+            bool hasDeferred = AssemblyLoader.loadedAssemblies != null && AssemblyLoader.loadedAssemblies.Any(a => a.name.Equals("Deferred", StringComparison.OrdinalIgnoreCase) || a.assembly.GetName().Name.Equals("Deferred", StringComparison.OrdinalIgnoreCase));
+            if (hasDeferred)
+            {
+                Log.log("[TUFX] Blackrack's Deferred Rendering mod detected! G-Buffer SSR and deferred lighting integration active.");
+            }
+            else
+            {
+                Log.log("[TUFX] Running on standard Forward rendering pipeline. (Deferred SSR requires Blackrack's Deferred mod).");
             }
         }
 
@@ -223,9 +237,9 @@ namespace TUFX
                             if (!this.shaders.ContainsKey(shaders[i].name))
                             {
                                 this.shaders.Add(shaders[i].name, shaders[i]);
-                                Log.debug("Loading advanced shader: " + shaders[i].name);
                             }
                         }
+                        Log.log($"[TUFX] Successfully loaded {shaders.Length} advanced shaders from tufx-advanced.ssf.");
                         bundle.Unload(false);
                     }
                 }

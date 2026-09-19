@@ -47,9 +47,26 @@ namespace TUFX
             UpdateEVAMode(vessel, currentProfile);
         }
 
+        private bool lastSunlightState = true;
+        private bool lastReentryState = false;
+        private bool lastEVAState = false;
+
         private void UpdateDayNightTransition(Vessel vessel, TUFXProfile profile)
         {
             bool inSunlight = vessel.directSunlight;
+            if (inSunlight != lastSunlightState)
+            {
+                lastSunlightState = inSunlight;
+                if (!inSunlight)
+                {
+                    Log.log("[TUFX Context] Vessel entered planetary shadow / orbital eclipse. Smoothly adapting exposure.");
+                }
+                else
+                {
+                    Log.log("[TUFX Context] Vessel exited eclipse into direct sunlight. Recovering exposure.");
+                }
+            }
+
             float targetAdaptation = inSunlight ? 0f : 1f;
 
             // Smoothly lerp transition over 2-3 seconds
@@ -80,6 +97,15 @@ namespace TUFX
             {
                 float intensityFactor = Mathf.Clamp01((mach - 3.0f) / 15.0f) * Mathf.Clamp01(dynamicPressure / 50.0f);
                 targetDistortion = intensityFactor * 0.8f;
+                if (!lastReentryState)
+                {
+                    lastReentryState = true;
+                    Log.log($"[TUFX Context] Hypersonic reentry heat haze active (Mach: {mach:F1}, Q: {dynamicPressure:F1} kPa).");
+                }
+            }
+            else
+            {
+                lastReentryState = false;
             }
 
             currentHeatDistortion = Mathf.MoveTowards(currentHeatDistortion, targetDistortion, Time.deltaTime * 1.5f);
@@ -88,6 +114,15 @@ namespace TUFX
 
         private void UpdateEVAMode(Vessel vessel, TUFXProfile profile)
         {
+            if (vessel.isEVA != lastEVAState)
+            {
+                lastEVAState = vessel.isEVA;
+                if (vessel.isEVA)
+                {
+                    Log.log("[TUFX Context] EVA Kerbal detected. Enabling visor curvature adaptively.");
+                }
+            }
+
             if (vessel.isEVA)
             {
                 var vignette = profile.GetSettingsFor<Vignette>();
