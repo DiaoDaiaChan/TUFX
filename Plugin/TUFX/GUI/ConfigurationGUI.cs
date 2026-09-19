@@ -66,7 +66,7 @@ namespace TUFX
         {
             try
             {
-                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, "TUFXSettings");
+                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, "TUFX: Beyond");
             }
             catch (Exception e)
             {
@@ -272,13 +272,20 @@ namespace TUFX
 
             extendScrollPos = GUILayout.BeginScrollView(extendScrollPos, false, true, (GUILayoutOption[])null);
 
-            // 1. AMD FidelityFX FSR 1.0 / CAS
+            // 0. Anti-Aliasing Control Center (Presets & TAA Tuning)
+            renderAdvancedAntiAliasingSettings();
+
+            // 1. Intel CMAA 2 (Conservative Morphological Anti-Aliasing)
+            renderCMAA2Settings();
+
+            // 2. AMD FidelityFX FSR 1.0 / EASU Reconstruction & CAS
+            renderFSRUpscalerSettings();
             renderCASSettings();
 
-            // 2. Modern Tonemapping (AgX / ACES / Tony / Filmic)
+            // 3. Modern Tonemapping (AgX / ACES / Tony / Filmic)
             renderModernTonemappingSettings();
 
-            // 3. Ground Truth Ambient Occlusion (GTAO)
+            // 4. Ground Truth Ambient Occlusion (XeGTAO)
             renderGTAOSettings();
 
             // 4. Screen Space Contact Shadows
@@ -302,7 +309,16 @@ namespace TUFX
             // 10. Hypersonic Reentry Heat Haze
             renderHeatDistortionSettings();
 
-            // 11. Dynamic Flight Context Adaptation Toggle
+            // 11. Camera-Motion Blur (Physical Shutter Speed Blur)
+            renderCameraMotionBlurSettings();
+
+            // 12. Screen Space Global Illumination (SSGI Diffuse Color Bleeding)
+            renderSSGISettings();
+
+            // 13. Screen Space Subsurface Scattering (SSSS Translucent Glow)
+            renderSubsurfaceScatteringSettings();
+
+            // 14. Dynamic Flight Context Adaptation Toggle
             renderDynamicContextSettings();
 
             GUILayout.EndScrollView();
@@ -630,13 +646,165 @@ namespace TUFX
             GUILayout.EndVertical();
         }
 
+        private void renderAdvancedAntiAliasingSettings()
+        {
+            var profile = TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile;
+            if (profile == null) return;
+
+            GUILayout.BeginVertical(HighLogic.Skin.box);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("<color=#FFDD55><b>[Anti-Aliasing Control Center] Next-Gen AA Presets & Tuning</b></color>");
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("<size=10><color=grey>Non-temporal morphological filters (CMAA 2 / SMAA) produce ZERO black ghost trails behind orbital vessels!</color></size>");
+
+            GUILayout.BeginHorizontal();
+            // Preset 1: Intel CMAA 2
+            bool isCMAA2Active = profile.GetSettingsFor<CMAA2Effect>() != null && profile.GetSettingsFor<CMAA2Effect>().enabled;
+            Color prevCol = GUI.color;
+            if (isCMAA2Active) GUI.color = new Color(0.4f, 1f, 0.4f);
+            if (GUILayout.Button("Intel CMAA 2 (No Ghosting)", GUILayout.Height(28)))
+            {
+                var cmaa = profile.GetSettingsFor<CMAA2Effect>();
+                if (cmaa == null)
+                {
+                    cmaa = ScriptableObject.CreateInstance<CMAA2Effect>();
+                    profile.Settings.Add(cmaa);
+                }
+                cmaa.enabled.Override(true);
+                profile.AntiAliasing = PostProcessLayer.Antialiasing.None;
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
+            GUI.color = prevCol;
+
+            // Preset 2: SMAA Ultra
+            bool isSMAAActive = profile.AntiAliasing == PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing;
+            if (isSMAAActive) GUI.color = new Color(0.4f, 1f, 0.4f);
+            if (GUILayout.Button("SMAA Ultra (Zero Smear)", GUILayout.Height(28)))
+            {
+                profile.AntiAliasing = PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing;
+                profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High;
+                var cmaa = profile.GetSettingsFor<CMAA2Effect>();
+                if (cmaa != null) cmaa.enabled.Override(false);
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
+            GUI.color = prevCol;
+
+            // Preset 3: Enhanced TAA
+            bool isTAAActive = profile.AntiAliasing == PostProcessLayer.Antialiasing.TemporalAntialiasing;
+            if (isTAAActive) GUI.color = new Color(0.4f, 1f, 0.4f);
+            if (GUILayout.Button("TAA (Smooth Temporal)", GUILayout.Height(28)))
+            {
+                profile.AntiAliasing = PostProcessLayer.Antialiasing.TemporalAntialiasing;
+                var cmaa = profile.GetSettingsFor<CMAA2Effect>();
+                if (cmaa != null) cmaa.enabled.Override(false);
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
+            GUI.color = prevCol;
+
+            // Preset 4: Off
+            if (GUILayout.Button("AA Off", GUILayout.Width(60), GUILayout.Height(28)))
+            {
+                profile.AntiAliasing = PostProcessLayer.Antialiasing.None;
+                var cmaa = profile.GetSettingsFor<CMAA2Effect>();
+                if (cmaa != null) cmaa.enabled.Override(false);
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
+            GUILayout.EndHorizontal();
+
+            // Render sub-settings depending on camera AA mode
+            if (profile.AntiAliasing == PostProcessLayer.Antialiasing.TemporalAntialiasing)
+            {
+                GUILayout.BeginVertical(HighLogic.Skin.box);
+                GUILayout.Label("<b>Enhanced TAA Parameters:</b> <color=grey>(Lower blending reduces black vessel ghosting)</color>");
+                
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"Stationary Blending: {profile.TAAStationaryBlending:F2}", GUILayout.Width(180));
+                float newStat = GUILayout.HorizontalSlider(profile.TAAStationaryBlending, 0.50f, 0.98f);
+                if (Math.Abs(newStat - profile.TAAStationaryBlending) > 0.001f)
+                {
+                    profile.TAAStationaryBlending = newStat;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"Motion Blending: {profile.TAAMotionBlending:F2}", GUILayout.Width(180));
+                float newMot = GUILayout.HorizontalSlider(profile.TAAMotionBlending, 0.30f, 0.95f);
+                if (Math.Abs(newMot - profile.TAAMotionBlending) > 0.001f)
+                {
+                    profile.TAAMotionBlending = newMot;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"Jitter Spread: {profile.TAAJitterSpread:F2}", GUILayout.Width(180));
+                float newJit = GUILayout.HorizontalSlider(profile.TAAJitterSpread, 0.10f, 1.0f);
+                if (Math.Abs(newJit - profile.TAAJitterSpread) > 0.001f)
+                {
+                    profile.TAAJitterSpread = newJit;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"TAA Sharpness: {profile.TAASharpness:F2}", GUILayout.Width(180));
+                float newSharp = GUILayout.HorizontalSlider(profile.TAASharpness, 0f, 1.0f);
+                if (Math.Abs(newSharp - profile.TAASharpness) > 0.001f)
+                {
+                    profile.TAASharpness = newSharp;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
+            }
+            else if (profile.AntiAliasing == PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing)
+            {
+                GUILayout.BeginVertical(HighLogic.Skin.box);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("<b>SMAA Quality Preset:</b>", GUILayout.Width(150));
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Low, "Low", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Low; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Medium, "Medium", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Medium; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.High, "High (Ultra)", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                GUILayout.EndHorizontal();
+                GUILayout.EndVertical();
+            }
+
+            GUILayout.EndVertical();
+        }
+
+        private void renderCMAA2Settings()
+        {
+            bool showProps = AddEffectHeader("Intel Conservative Morphological Anti-Aliasing (CMAA 2)", out CMAA2Effect cmaa);
+            if (showProps)
+            {
+                AddFloatParameter("Edge Sensitivity", cmaa.edgeThreshold, 0.02f, 0.25f);
+                AddFloatParameter("Extra Sharpness", cmaa.extraSharpness, 0.1f, 1.0f);
+                GUILayout.Label("<size=10><color=grey>Intel's state-of-the-art morphological AA algorithm. Extremely sharp edge smoothing without temporal ghosting or blur.</color></size>");
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderFSRUpscalerSettings()
+        {
+            bool showProps = AddEffectHeader("AMD FidelityFX FSR 1.0 (EASU Reconstruction & Upscaler)", out EASUUpscaler fsr);
+            if (showProps)
+            {
+                AddEnumParameter("Quality Mode", fsr.quality);
+                AddFloatParameter("Sharpness (RCAS)", fsr.sharpness, 0f, 1f);
+                GUILayout.Label("<size=10><color=grey>AMD FSR 1.0 Edge-Adaptive Spatial Upsampling (EASU) with 12-tap directional reconstruction. Renders at sub-native scale (50%~77%) for massive FPS gains while preserving razor-sharp geometry.</color></size>");
+            }
+            GUILayout.EndVertical();
+        }
+
         private void renderCASSettings()
         {
             bool showProps = AddEffectHeader("AMD FidelityFX FSR 1.0 / CAS (Contrast Adaptive Sharpening)", out ContrastAdaptiveSharpening cas);
             if (showProps)
             {
                 AddFloatParameter("Sharpness", cas.sharpness, 0f, 1f);
-                GUILayout.Label("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening algorithm (RCAS) to restore micro-details.</color></size>");
+                GUILayout.Label("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening (RCAS). Combine with CMAA 2 / SMAA / TAA above for crystal-clear antialiased visuals!</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -674,12 +842,17 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Streak Intensity", af.streakIntensity, 0f, 5f);
-                AddFloatParameter("Streak Length", af.streakLength, 0.5f, 10f);
+                AddFloatParameter("Streak Length", af.streakLength, 0.5f, 15f);
                 AddColorParameter("Streak Color", af.streakColor);
+                AddFloatParameter("Ghost Intensity", af.ghostIntensity, 0f, 3f);
+                AddFloatParameter("Ghost Spread", af.ghostSpread, 0.2f, 2f);
+                AddColorParameter("Ghost Color", af.ghostColor);
+                AddFloatParameter("Dispersion", af.dispersion, 0f, 2f);
                 AddFloatParameter("Spike Intensity", af.spikeIntensity, 0f, 5f);
                 AddIntParameter("Spike Count", af.spikeCount, 4, 8);
                 AddFloatParameter("Spike Length", af.spikeLength, 0.5f, 10f);
                 AddFloatParameter("Threshold", af.threshold, 0.5f, 15f);
+                GUILayout.Label("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, and diffraction starbursts.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -693,6 +866,7 @@ namespace TUFX
                 AddFloatParameter("Intensity", gtao.intensity, 0f, 4f);
                 AddFloatParameter("Thickness", gtao.thickness, 0.1f, 5f);
                 AddFloatParameter("Multi-Bounce", gtao.multiBounce, 0f, 1f);
+                AddFloatParameter("Specular Occlusion", gtao.specularOcclusion, 0f, 1f);
                 AddColorParameter("Color", gtao.color);
             }
             GUILayout.EndVertical();
@@ -731,10 +905,55 @@ namespace TUFX
             bool showProps = AddEffectHeader("Spectral Bokeh (Chromatic DoF)", out SpectralBokeh sb);
             if (showProps)
             {
-                AddFloatParameter("Focus Distance", sb.focusDistance, 0.1f, 200f);
-                AddFloatParameter("Focal Length", sb.focalLength, 10f, 200f);
+                AddBoolParameter("Auto Focus", sb.autoFocus);
+                if (sb.autoFocus.value)
+                {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(20);
+                    GUILayout.Label($"Tracking: <color=#88FF88>{SpectralBokeh.LastFocusedDistance:F1} m</color>", GUILayout.Width(180));
+                    if (GUILayout.Button("Lock / Switch to Manual", GUILayout.Width(170)))
+                    {
+                        sb.focusDistance.Override(SpectralBokeh.LastFocusedDistance);
+                        sb.autoFocus.Override(false);
+                        TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                    }
+                    GUILayout.EndHorizontal();
+
+                    AddFloatParameter("Rack Speed", sb.autoFocusSpeed, 1f, 30f);
+                }
+                else
+                {
+                    AddFloatParameter("Focus Distance", sb.focusDistance, 0.1f, 500f);
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(20);
+                    if (GUILayout.Button("Auto-Focus Once", GUILayout.Width(150)))
+                    {
+                        float instantDist = SpectralBokeh.ComputeTargetDistance(Camera.main, sb.focusDistance.value);
+                        sb.focusDistance.Override(instantDist);
+                        TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                    }
+                    GUILayout.EndHorizontal();
+                }
+
+                AddFloatParameter("Focal Length", sb.focalLength, 10f, 300f);
+                AddFloatParameter("Anamorphic Ratio", sb.anamorphicRatio, 0.5f, 3.0f);
                 AddFloatParameter("Dispersion", sb.dispersionStrength, 0f, 2f);
                 AddFloatParameter("Max Bokeh Radius", sb.maxBokehRadius, 1f, 20f);
+                GUILayout.Label("<size=10><color=grey>Physically-simulated optical chromatic DoF with auto tracking, rainbow dispersion, and 2x Hollywood oval bokeh.</color></size>");
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderCameraMotionBlurSettings()
+        {
+            bool showProps = AddEffectHeader("Camera Motion Blur (Physical Shutter)", out CameraMotionBlurEffect cmb);
+            if (showProps)
+            {
+                AddEnumParameter("Source", cmb.mode);
+                AddFloatParameter("Shutter Angle", cmb.shutterAngle, 0f, 360f);
+                AddIntParameter("Samples", cmb.sampleCount, 4, 16);
+                AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 5f, 64f);
+                GUILayout.Label("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors for smooth cinematic shutter motion blur in high-angular speed maneuvers.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -748,7 +967,7 @@ namespace TUFX
                 bool hasDeferredMod = AssemblyLoader.loadedAssemblies != null && AssemblyLoader.loadedAssemblies.Any(a => a.name.Equals("Deferred", StringComparison.OrdinalIgnoreCase) || a.assembly.GetName().Name.Equals("Deferred", StringComparison.OrdinalIgnoreCase));
                 
                 GUILayout.BeginVertical(HighLogic.Skin.box);
-                GUILayout.Label($"[SSR Pipeline] Status: {(isDeferred ? "Deferred Active (Full SSR)" : "Forward Mode (Inactive - Requires Deferred mod)")}");
+                GUILayout.Label($"[SSR Pipeline] Status: {(isDeferred ? "<color=green>Deferred Active (Full PBR SSR)</color>" : "<color=yellow>Forward Active (SSSR Mode)</color>")}");
                 GUILayout.Label($"Deferred Mod: {(hasDeferredMod ? "Detected" : "Not Detected")}, Camera: {(Camera.main != null ? Camera.main.actualRenderingPath.ToString() : "N/A")}");
                 if (GUILayout.Button("Print SSR Diagnostics to KSP.log", GUILayout.Width(260)))
                 {
@@ -762,6 +981,11 @@ namespace TUFX
                 AddFloatParameter("Max March Dist", ssr.maximumMarchDistance, 10f, 500f);
                 AddFloatParameter("Distance Fade", ssr.distanceFade, 0f, 1f);
                 AddFloatParameter("Vignette", ssr.vignette, 0f, 1f);
+                AddFloatParameter("Reflection Intensity", ssr.reflectionIntensity, 0f, 2f);
+                if (!isDeferred)
+                {
+                    AddFloatParameter("Forward PBR Bias", ssr.forwardPbrBias, 0.01f, 1f);
+                }
             }
             GUILayout.EndVertical();
         }
@@ -774,6 +998,36 @@ namespace TUFX
                 AddFloatParameter("Intensity", hd.intensity, 0f, 2f);
                 AddFloatParameter("Speed", hd.speed, 0.2f, 10f);
                 AddFloatParameter("Scale", hd.scale, 1f, 30f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderSSGISettings()
+        {
+            bool showProps = AddEffectHeader("Screen Space Global Illumination (SSGI)", out SSGIEffect ssgi);
+            if (showProps)
+            {
+                AddFloatParameter("Intensity", ssgi.intensity, 0f, 4f);
+                AddIntParameter("Ray Count", ssgi.rayCount, 2, 8);
+                AddIntParameter("Ray Steps", ssgi.raySteps, 4, 16);
+                AddFloatParameter("Ray Length (m)", ssgi.rayLength, 0.5f, 20f);
+                AddFloatParameter("Thickness", ssgi.thickness, 0.1f, 3f);
+                AddColorParameter("Bounce Color", ssgi.bounceColor);
+                GUILayout.Label("<size=10><color=grey>Single-bounce screen-space diffuse indirect illumination & realistic color bleeding from terrain and nearby vehicle hulls.</color></size>");
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderSubsurfaceScatteringSettings()
+        {
+            bool showProps = AddEffectHeader("Screen Space Subsurface Scattering (SSSS)", out SubsurfaceScatteringEffect ssss);
+            if (showProps)
+            {
+                AddFloatParameter("Intensity", ssss.intensity, 0f, 1f);
+                AddFloatParameter("Scatter Radius (mm)", ssss.scatterRadius, 0.1f, 10f);
+                AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 0.5f);
+                AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
+                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency and icy celestial body jade-like subsurface glow.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -816,22 +1070,39 @@ namespace TUFX
             if (effectEnabled && effect == null)
             {
                 effect = ScriptableObject.CreateInstance<T>();
+                effect.enabled.Override(true);
+                if (effect.parameters != null)
+                {
+                    foreach (var p in effect.parameters)
+                    {
+                        p.overrideState = true;
+                    }
+                }
                 TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile.Settings.Add(effect);
-				TexturesUnlimitedFXLoader.INSTANCE.enableProfileForCurrentScene();
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
 			}
+            else if (effect != null && effect.enabled.value != effectEnabled)
+            {
+                effect.enabled.Override(effectEnabled);
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
 
             if (effect)
             {
                 effect.enabled.Override(effectEnabled);
             }
 
-            
             return showProps;
         }
 
         bool DrawParamToggle(string label, ParameterOverride param)
         {
+            bool prev = param.overrideState;
 			param.overrideState = GUILayout.Toggle(param.overrideState, label, GUILayout.Width(200), GUILayout.Height(22));
+            if (param.overrideState != prev)
+            {
+                TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+            }
             return param.overrideState;
 		}
 
@@ -850,6 +1121,7 @@ namespace TUFX
                     index--;
                     if (index < 0) { index = values.Length - 1; }
                     param.Override(values[index]);
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
                 GUILayout.Label(value.ToString(), GUILayout.Width(220));
                 if (GUILayout.Button(">", GUILayout.Width(110)))
@@ -857,6 +1129,7 @@ namespace TUFX
                     index++;
                     if (index >= values.Length) { index = 0; }
                     param.Override(values[index]);
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
             
@@ -899,7 +1172,8 @@ namespace TUFX
             {
                 if (GUILayout.Button(param.value.ToString(), GUILayout.Width(110)))
                 {
-                    param.value = !param.value;
+                    param.Override(!param.value);
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
             GUILayout.EndHorizontal();
@@ -928,6 +1202,7 @@ namespace TUFX
                     if (int.TryParse(textValue, out int v))
                     {
                         param.Override(v);
+                        TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                     }
                     propertyStringStorage[hash] = textValue;
                 }
@@ -943,6 +1218,7 @@ namespace TUFX
                     textValue = ((int)sliderValue2).ToString();
                     propertyStringStorage[hash] = textValue;
                     propertyFloatStorage[hash] = sliderValue2;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
             GUILayout.EndHorizontal();
@@ -971,6 +1247,7 @@ namespace TUFX
                     if (float.TryParse(textValue, out float v))
                     {
                         param.Override(v);
+                        TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                     }
                     propertyStringStorage[hash] = textValue;
                 }
@@ -980,6 +1257,7 @@ namespace TUFX
                     param.Override(sliderValue);
                     textValue = sliderValue.ToString();
                     propertyStringStorage[hash] = textValue;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
             GUILayout.EndHorizontal();
@@ -1019,6 +1297,7 @@ namespace TUFX
                 if (float.TryParse(curTextVal, out float v))
                 {
                     val = v;
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
                 propertyStringStorage[key] = curTextVal;
             }

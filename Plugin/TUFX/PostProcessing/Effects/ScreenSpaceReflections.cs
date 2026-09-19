@@ -135,6 +135,12 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0f, 1f), Tooltip("Fades reflections close to the screen edges.")]
         public FloatParameter vignette = new FloatParameter { value = 0.5f };
 
+        [Range(0f, 2f), Tooltip("Global reflection intensity multiplier.")]
+        public FloatParameter reflectionIntensity = new FloatParameter { value = 1.0f };
+
+        [Range(0.01f, 1f), Tooltip("Base surface reflectivity for Forward shading mode (Schlick Fresnel bias). Higher values give stronger base reflections on non-metallic surfaces.")]
+        public FloatParameter forwardPbrBias = new FloatParameter { value = 0.2f };
+
         /// <summary>
         /// Returns <c>true</c> if the effect is currently enabled and supported.
         /// </summary>
@@ -149,16 +155,6 @@ namespace UnityEngine.Rendering.PostProcessing
                 reason = "Camera is null";
                 return false;
             }
-            if (context.camera.actualRenderingPath != RenderingPath.DeferredShading)
-            {
-                reason = $"Camera path is {context.camera.actualRenderingPath}, requires DeferredShading (install Blackrack's Deferred mod)";
-                return false;
-            }
-            if (!SystemInfo.supportsMotionVectors)
-            {
-                reason = "Hardware does not support motion vectors";
-                return false;
-            }
             if (!SystemInfo.supportsComputeShaders)
             {
                 reason = "Hardware does not support compute shaders";
@@ -169,7 +165,11 @@ namespace UnityEngine.Rendering.PostProcessing
                 reason = "Hardware copyTextureSupport is None";
                 return false;
             }
-            if (context.resources?.shaders?.screenSpaceReflections == null || !context.resources.shaders.screenSpaceReflections.isSupported)
+            var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null)
+                ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/ScreenSpaceReflections")
+                : null;
+            if (shader == null) shader = context.resources?.shaders?.screenSpaceReflections;
+            if (shader == null || !shader.isSupported)
             {
                 reason = "SSR shader missing or not supported on this graphics device";
                 return false;
@@ -190,9 +190,10 @@ namespace UnityEngine.Rendering.PostProcessing
             if (enabled.value && !s_HasLoggedSupport)
             {
                 s_HasLoggedSupport = true;
+                bool isDeferred = context.camera != null && context.camera.actualRenderingPath == RenderingPath.DeferredShading;
                 if (supported)
                 {
-                    TUFX.Log.log($"[TUFX SSR] Enabled and supported on camera '{context?.camera?.name}' with Deferred shading pipeline.");
+                    TUFX.Log.log($"[TUFX SSR] Enabled and supported on camera '{context?.camera?.name}' with {(isDeferred ? "Deferred PBR" : "Forward SSSR")} pipeline.");
                 }
                 else
                 {
@@ -211,6 +212,8 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "MaxMarchDistance", maximumMarchDistance);
             loadFloatParameter(config, "DistanceFade", distanceFade);
             loadFloatParameter(config, "Vignette", vignette);
+            loadFloatParameter(config, "ReflectionIntensity", reflectionIntensity);
+            loadFloatParameter(config, "ForwardPbrBias", forwardPbrBias);
         }
 
         public override void Save(ConfigNode config)
@@ -222,6 +225,8 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "MaxMarchDistance", maximumMarchDistance);
             saveFloatParameter(config, "DistanceFade", distanceFade);
             saveFloatParameter(config, "Vignette", vignette);
+            saveFloatParameter(config, "ReflectionIntensity", reflectionIntensity);
+            saveFloatParameter(config, "ForwardPbrBias", forwardPbrBias);
         }
 
     }
@@ -319,7 +324,12 @@ namespace UnityEngine.Rendering.PostProcessing
             CheckRT(ref m_Resolve, size, size, FilterMode.Trilinear, true);
 
             var noiseTex = context.resources.blueNoise256[0];
-            var sheet = context.propertySheets.Get(context.resources.shaders.screenSpaceReflections);
+            var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null)
+                ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/ScreenSpaceReflections")
+                : null;
+            if (shader == null) shader = context.resources.shaders.screenSpaceReflections;
+            if (shader == null) return;
+            var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetTexture(ShaderIDs.Noise, noiseTex);
 
             var screenSpaceProjectionMatrix = new Matrix4x4();
@@ -330,6 +340,11 @@ namespace UnityEngine.Rendering.PostProcessing
 
             var projectionMatrix = GL.GetGPUProjectionMatrix(context.camera.projectionMatrix, false);
             screenSpaceProjectionMatrix *= projectionMatrix;
+
+            bool isDeferred = context.camera != null && context.camera.actualRenderingPath == RenderingPath.DeferredShading;
+            sheet.properties.SetFloat("_IsDeferred", isDeferred ? 1.0f : 0.0f);
+            sheet.properties.SetFloat("_ReflectionIntensity", settings.reflectionIntensity.value);
+            sheet.properties.SetFloat("_ForwardPbrBias", settings.forwardPbrBias.value);
 
             sheet.properties.SetMatrix(ShaderIDs.ViewMatrix, context.camera.worldToCameraMatrix);
             sheet.properties.SetMatrix(ShaderIDs.InverseViewMatrix, context.camera.worldToCameraMatrix.inverse);

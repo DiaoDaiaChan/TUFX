@@ -1,3 +1,15 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2021, Advanced Micro Devices, Inc. All rights reserved.
+// Licensed under the MIT License (AMD FidelityFX FSR 1.0 / RCAS).
+//
+// Contrast Adaptive Sharpening (CAS / RCAS)
+// Algorithm: AMD FidelityFX Robust Contrast-Adaptive Sharpening, from FidelityFX FSR 1.0.
+//   Reference implementation: https://github.com/GPUOpen-Effects/FidelityFX-FSR
+//   License: MIT
+// This is an independent HLSL implementation of the RCAS weighting kernel, adapted for the Unity
+// PostProcessing Stack and TUFX. It is not a verbatim copy of the AMD source.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 Shader "Hidden/TUFX/ContrastAdaptiveSharpening"
 {
     HLSLINCLUDE

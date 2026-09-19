@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
-    [PostProcess(typeof(HeatDistortionRenderer), PostProcessEvent.BeforeStack, "TUFX/Heat Distortion")]
+    [PostProcess(typeof(HeatDistortionRenderer), PostProcessEvent.BeforeStack, "TUFX/Heat Distortion", sortingPriority: 50)]
     public sealed class HeatDistortionEffect : PostProcessEffectSettings
     {
         [Range(0f, 2f), Tooltip("Thermal heat wave distortion intensity.")]

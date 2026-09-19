@@ -91,6 +91,9 @@
     <Compile Include="GUI\DebugGUI.cs" />
     <Compile Include="GUI\SplineConfigurationGUI.cs" />
     <Compile Include="PostProcessing\Effects\AnamorphicFlare.cs" />
+    <Compile Include="PostProcessing\Effects\CMAA2Effect.cs" />
+    <Compile Include="PostProcessing\Effects\CameraMotionBlurEffect.cs" />
+    <Compile Include="PostProcessing\Effects\EASUUpscaler.cs" />
     <Compile Include="PostProcessing\Effects\ContactShadows.cs" />
     <Compile Include="PostProcessing\Effects\ContrastAdaptiveSharpening.cs" />
     <Compile Include="PostProcessing\Effects\GodRays.cs" />
@@ -99,6 +102,8 @@
     <Compile Include="PostProcessing\Effects\HeatDistortionEffect.cs" />
     <Compile Include="PostProcessing\Effects\ModernTonemapping.cs" />
     <Compile Include="PostProcessing\Effects\SpectralBokeh.cs" />
+    <Compile Include="PostProcessing\Effects\SSGIEffect.cs" />
+    <Compile Include="PostProcessing\Effects\SubsurfaceScatteringEffect.cs" />
     <Compile Include="PostProcessing\Attributes\DisplayNameAttribute.cs" />
     <Compile Include="PostProcessing\Attributes\MaxAttribute.cs" />
     <Compile Include="PostProcessing\Attributes\MinAttribute.cs" />

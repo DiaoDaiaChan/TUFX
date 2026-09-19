@@ -366,6 +366,27 @@ namespace UnityEngine.Rendering.PostProcessing
                 var bundle = effects.Find(b => b.settings.GetType().AssemblyQualifiedName == typeName);
                 effect.bundle = bundle;
             }
+
+            // TUFX: make the execution order of custom effects deterministic.
+            // This list used to be appended in reflection-enumeration order (PostProcessManager.settingsTypes.Keys),
+            // which is not guaranteed to be stable and left the relative order of effects sharing an injection
+            // point -- most critically CMAA2 vs. FSR CAS, where running CAS first would sharpen aliased edges --
+            // effectively up to chance. Sort by the explicit sortingPriority declared on PostProcessAttribute,
+            // breaking ties by type name so the result is a total order and cannot flip between runs.
+            sortedList.Sort(CompareBundleRefsByPriority);
+        }
+
+        static int CompareBundleRefsByPriority(SerializedBundleRef a, SerializedBundleRef b)
+        {
+            int priorityA = a.bundle != null ? a.bundle.attribute.sortingPriority : 0;
+            int priorityB = b.bundle != null ? b.bundle.attribute.sortingPriority : 0;
+
+            int result = priorityA.CompareTo(priorityB);
+            if (result != 0)
+                return result;
+
+            // Total order tie-break: never inherit reflection order.
+            return string.CompareOrdinal(a.assemblyQualifiedName, b.assemblyQualifiedName);
         }
 
         void OnDisable()

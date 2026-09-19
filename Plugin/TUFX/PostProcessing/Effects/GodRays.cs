@@ -3,7 +3,7 @@ using System;
 namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
-    [PostProcess(typeof(GodRaysRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space God Rays")]
+    [PostProcess(typeof(GodRaysRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space God Rays", sortingPriority: 40)]
     public sealed class GodRays : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("God rays brightness intensity.")]
@@ -80,11 +80,34 @@ namespace UnityEngine.Rendering.PostProcessing
 
             Vector3 sunPointWorld = (context.camera != null) ? (context.camera.transform.position + sunDirWorld * 10000.0f) : (Vector3.forward * 10000.0f);
             Vector3 vp = (context.camera != null) ? context.camera.WorldToViewportPoint(sunPointWorld) : Vector3.zero;
-            float sunVisible = (vp.z > 0f && vp.x >= -0.2f && vp.x <= 1.2f && vp.y >= -0.2f && vp.y <= 1.2f) ? 1.0f : 0.0f;
+            float sunVisible = (vp.z > 0f && vp.x >= -0.4f && vp.x <= 1.4f && vp.y >= -0.4f && vp.y <= 1.4f) ? 1.0f : 0.0f;
+
+            // Apparent sun disc radius in viewport height units
+            float sunDiscRadiusHeights = 0.06f;
+            if (context.camera != null && Planetarium.fetch != null && Planetarium.fetch.Sun != null)
+            {
+                try
+                {
+                    CelestialBody star = Planetarium.fetch.Sun;
+                    Vector3 toStar = (Sun.Instance != null)
+                        ? (Sun.Instance.transform.position - context.camera.transform.position)
+                        : (Vector3)(star.position - (Vector3d)context.camera.transform.position);
+                    double dist = toStar.magnitude;
+                    if (dist > 1000.0)
+                    {
+                        double angularRadius = star.Radius / dist;
+                        float p00 = Mathf.Max(0.0001f, context.camera.projectionMatrix.m00);
+                        float sunDiscRadiusPixels = (float)(angularRadius * p00 * (context.width * 0.5));
+                        sunDiscRadiusHeights = Mathf.Clamp(sunDiscRadiusPixels / Mathf.Max(1f, context.height), 0.02f, 0.25f);
+                    }
+                }
+                catch { }
+            }
 
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetVector("_SunScreenPos", new Vector2(vp.x, vp.y));
             sheet.properties.SetFloat("_SunVisible", sunVisible);
+            sheet.properties.SetFloat("_SunDiscRadius", sunDiscRadiusHeights);
             sheet.properties.SetFloat("_Density", settings.density.value);
             sheet.properties.SetFloat("_Decay", settings.decay.value);
             sheet.properties.SetFloat("_Weight", settings.weight.value);

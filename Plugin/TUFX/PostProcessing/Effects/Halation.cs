@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
-    [PostProcess(typeof(HalationRenderer), PostProcessEvent.BeforeStack, "TUFX/Halation")]
+    [PostProcess(typeof(HalationRenderer), PostProcessEvent.BeforeStack, "TUFX/Halation", sortingPriority: 70)]
     public sealed class Halation : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Halation intensity.")]

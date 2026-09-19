@@ -396,3 +396,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Tools and logs
+.workbuddy/
+unity_build.log
+GameData/TUFX/Shaders/Shaders
+GameData/TUFX/Shaders/Shaders.manifest

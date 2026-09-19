@@ -1,9 +1,9 @@
 ManifestFileVersion: 0
-CRC: 2418421380
+CRC: 2962762796
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: dd7dcc84b60e137c5a2949851193b71c
+    Hash: 1a17e8f7e4d5ca1230f15c3a6a163387
   TypeTreeHash:
     serializedVersion: 2
     Hash: 55d48f4ad9c3b13330b9eb5ee5686477
@@ -13,13 +13,19 @@ ClassTypes:
   Script: {instanceID: 0}
 SerializeReferenceClassIdentifiers: []
 Assets:
+- Assets/Shaders/TUFX/CameraMotionBlur.shader
+- Assets/Shaders/TUFX/ScreenSpaceReflections.shader
 - Assets/Shaders/TUFX/ModernTonemapping.shader
 - Assets/Shaders/TUFX/AnamorphicFlare.shader
+- Assets/Shaders/TUFX/SSGI.shader
 - Assets/Shaders/TUFX/Halation.shader
 - Assets/Shaders/TUFX/HeatDistortion.shader
 - Assets/Shaders/TUFX/FidelityFX_CAS.shader
 - Assets/Shaders/TUFX/GroundTruthAO.shader
+- Assets/Shaders/TUFX/FidelityFX_EASU.shader
 - Assets/Shaders/TUFX/GodRays.shader
+- Assets/Shaders/TUFX/CMAA2.shader
 - Assets/Shaders/TUFX/SpectralBokeh.shader
 - Assets/Shaders/TUFX/ContactShadows.shader
+- Assets/Shaders/TUFX/SubsurfaceScattering.shader
 Dependencies: []

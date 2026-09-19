@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
     [Serializable]
-    [PostProcess(typeof(ContrastAdaptiveSharpeningRenderer), PostProcessEvent.AfterStack, "TUFX/Contrast Adaptive Sharpening")]
+    [PostProcess(typeof(ContrastAdaptiveSharpeningRenderer), PostProcessEvent.AfterStack, "TUFX/Contrast Adaptive Sharpening", sortingPriority: 120)]
     public sealed class ContrastAdaptiveSharpening : PostProcessEffectSettings
     {
         [Range(0f, 1f), Tooltip("Sharpening intensity (0 = disabled, 1 = maximum).")]

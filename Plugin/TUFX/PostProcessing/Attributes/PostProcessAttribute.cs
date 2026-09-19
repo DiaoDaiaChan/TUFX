@@ -31,6 +31,13 @@ namespace UnityEngine.Rendering.PostProcessing
         /// </summary>
         public readonly bool allowInSceneView;
 
+        /// <summary>
+        /// TUFX: deterministic execution order for custom effects sharing the same injection point.
+        /// Effects are sorted ascending by this value; ties are broken by type name so the resulting
+        /// order never depends on reflection enumeration order. Lower runs earlier.
+        /// </summary>
+        public readonly int sortingPriority;
+
         internal readonly bool builtinEffect;
 
         /// <summary>
@@ -40,12 +47,14 @@ namespace UnityEngine.Rendering.PostProcessing
         /// <param name="eventType">The injection point for the effect</param>
         /// <param name="menuItem">The menu item name to set for the effect. You can use a `/` character to add sub-menus.</param>
         /// <param name="allowInSceneView">Should this effect be allowed in the Scene View?</param>
-        public PostProcessAttribute(Type renderer, PostProcessEvent eventType, string menuItem, bool allowInSceneView = true)
+        /// <param name="sortingPriority">TUFX: ascending execution order within the same injection point. Lower runs earlier.</param>
+        public PostProcessAttribute(Type renderer, PostProcessEvent eventType, string menuItem, bool allowInSceneView = true, int sortingPriority = 0)
         {
             this.renderer = renderer;
             this.eventType = eventType;
             this.menuItem = menuItem;
             this.allowInSceneView = allowInSceneView;
+            this.sortingPriority = sortingPriority;
             builtinEffect = false;
         }
 

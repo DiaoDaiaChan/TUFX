@@ -590,6 +590,18 @@ namespace TUFX
             {
                 layer.antialiasingMode = isPrimaryCamera ? tufxProfile.AntiAliasing : tufxProfile.SecondaryCameraAntialiasing;
             }
+
+            if (layer.subpixelMorphologicalAntialiasing != null)
+            {
+                layer.subpixelMorphologicalAntialiasing.quality = tufxProfile.SMAAQuality;
+            }
+            if (layer.temporalAntialiasing != null)
+            {
+                layer.temporalAntialiasing.jitterSpread = tufxProfile.TAAJitterSpread;
+                layer.temporalAntialiasing.sharpness = tufxProfile.TAASharpness;
+                layer.temporalAntialiasing.stationaryBlending = tufxProfile.TAAStationaryBlending;
+                layer.temporalAntialiasing.motionBlending = tufxProfile.TAAMotionBlending;
+            }
 		}
 
         private void ApplyCurrentProfile()

@@ -36,7 +36,12 @@ namespace TUFX
         GodRays,
         SpectralBokeh,
         ScreenSpaceReflections,
-        HeatDistortion
+        HeatDistortion,
+        CMAA2,
+        CameraMotionBlur,
+        FSRUpscaler,
+        SSGI,
+        SubsurfaceScattering
     }
 
     public class TUFXProfileManager
@@ -88,6 +93,16 @@ namespace TUFX
                     return ScriptableObject.CreateInstance<ScreenSpaceReflections>();
                 case BuiltinEffect.HeatDistortion:
                     return ScriptableObject.CreateInstance<HeatDistortionEffect>();
+                case BuiltinEffect.CMAA2:
+                    return ScriptableObject.CreateInstance<CMAA2Effect>();
+                case BuiltinEffect.CameraMotionBlur:
+                    return ScriptableObject.CreateInstance<CameraMotionBlurEffect>();
+                case BuiltinEffect.FSRUpscaler:
+                    return ScriptableObject.CreateInstance<EASUUpscaler>();
+                case BuiltinEffect.SSGI:
+                    return ScriptableObject.CreateInstance<SSGIEffect>();
+                case BuiltinEffect.SubsurfaceScattering:
+                    return ScriptableObject.CreateInstance<SubsurfaceScatteringEffect>();
                 default:
                     break;
             }
@@ -117,6 +132,11 @@ namespace TUFX
             else if (settings is SpectralBokeh) { return BuiltinEffect.SpectralBokeh; }
             else if (settings is ScreenSpaceReflections) { return BuiltinEffect.ScreenSpaceReflections; }
             else if (settings is HeatDistortionEffect) { return BuiltinEffect.HeatDistortion; }
+            else if (settings is CMAA2Effect) { return BuiltinEffect.CMAA2; }
+            else if (settings is CameraMotionBlurEffect) { return BuiltinEffect.CameraMotionBlur; }
+            else if (settings is EASUUpscaler) { return BuiltinEffect.FSRUpscaler; }
+            else if (settings is SSGIEffect) { return BuiltinEffect.SSGI; }
+            else if (settings is SubsurfaceScatteringEffect) { return BuiltinEffect.SubsurfaceScattering; }
             return BuiltinEffect.AmbientOcclusion;
         }
 
@@ -145,6 +165,12 @@ namespace TUFX
 
         public PostProcessLayer.Antialiasing SecondaryCameraAntialiasing;
 
+        public SubpixelMorphologicalAntialiasing.Quality SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High;
+        public float TAAJitterSpread = 0.75f;
+        public float TAASharpness = 0.25f;
+        public float TAAStationaryBlending = 0.90f;
+        public float TAAMotionBlending = 0.75f;
+
         private UrlDir.UrlConfig urlConfig;
 
         public string CfgPath => urlConfig.parent.url;
@@ -171,6 +197,11 @@ namespace TUFX
             node.SetValue("hdr", HDREnabled, true);
             node.SetValue("antialiasing", AntiAliasing.ToString(), true);
             node.SetValue("secondaryAntialiasing", SecondaryCameraAntialiasing.ToString(), true);
+            node.SetValue("smaaQuality", SMAAQuality.ToString(), true);
+            node.SetValue("taaJitterSpread", TAAJitterSpread.ToString(), true);
+            node.SetValue("taaSharpness", TAASharpness.ToString(), true);
+            node.SetValue("taaStationaryBlending", TAAStationaryBlending.ToString(), true);
+            node.SetValue("taaMotionBlending", TAAMotionBlending.ToString(), true);
             int len = Settings.Count;
             for (int i = 0; i < len; i++)
             {
@@ -217,6 +248,11 @@ namespace TUFX
             HDREnabled = node.GetBoolValue("hdr", false);
             AntiAliasing = node.GetEnumValue("antialiasing", PostProcessLayer.Antialiasing.None);
             SecondaryCameraAntialiasing = node.GetEnumValue("secondaryAntialiasing", PostProcessLayer.Antialiasing.None);
+            SMAAQuality = node.GetEnumValue("smaaQuality", SubpixelMorphologicalAntialiasing.Quality.High);
+            TAAJitterSpread = node.GetFloatValue("taaJitterSpread", 0.75f);
+            TAASharpness = node.GetFloatValue("taaSharpness", 0.25f);
+            TAAStationaryBlending = node.GetFloatValue("taaStationaryBlending", 0.90f);
+            TAAMotionBlending = node.GetFloatValue("taaMotionBlending", 0.75f);
             Settings.Clear();
             ConfigNode[] effectNodes = node.GetNodes("EFFECT");
             int len = effectNodes.Length;
