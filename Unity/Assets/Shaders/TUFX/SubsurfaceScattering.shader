@@ -12,18 +12,12 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
         float _Intensity;
         float _DepthThreshold;
         float _MaxDistance;
+        float _AutoAdapt;
         float4 _SubsurfaceColor;
 
-        // Jimenez 6-tap separable subsurface kernel weights
+        // Isotropic separable subsurface kernel weights (neutral diffusion, zero chromatic bias)
         static const float kernelOffsets[6] = { 0.0, 0.05, 0.12, 0.26, 0.58, 1.0 };
-        static const float3 kernelWeights[6] = {
-            float3(0.24, 0.24, 0.24),
-            float3(0.32, 0.17, 0.10),
-            float3(0.20, 0.18, 0.15),
-            float3(0.12, 0.16, 0.20),
-            float3(0.08, 0.13, 0.25),
-            float3(0.04, 0.12, 0.06)
-        };
+        static const float kernelWeights[6] = { 0.24, 0.22, 0.18, 0.14, 0.12, 0.10 };
 
         // Pass 0: Horizontal Diffusion Pass (Distance-Gated)
         float4 FragSSSSHorizontal(VaryingsDefault i) : SV_Target
@@ -47,7 +41,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             float scale = (_ScatterRadius / max(0.5, centerDepth)) * _MainTex_TexelSize.x * 1.5;
 
             float3 totalColor = centerCol.rgb * kernelWeights[0];
-            float3 totalWeight = kernelWeights[0];
+            float totalWeight = kernelWeights[0];
 
             [unroll]
             for (int k = 1; k < 6; k++)
@@ -65,11 +59,11 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
                 float3 tapColL = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvL).rgb;
                 float3 tapColR = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uvR).rgb;
 
-                totalColor += tapColL * (kernelWeights[k] * wL) + tapColR * (kernelWeights[k] * wR);
-                totalWeight += kernelWeights[k] * (wL + wR);
+                totalColor += (tapColL * wL + tapColR * wR) * kernelWeights[k];
+                totalWeight += (wL + wR) * kernelWeights[k];
             }
 
-            float3 blurred = totalColor / max(float3(0.0001, 0.0001, 0.0001), totalWeight);
+            float3 blurred = totalColor / max(0.0001, totalWeight);
             return float4(blurred, centerCol.a);
         }
 
@@ -94,7 +88,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             float scale = (_ScatterRadius / max(0.5, centerDepth)) * _MainTex_TexelSize.y * 1.5;
 
             float3 totalColor = centerCol.rgb * kernelWeights[0];
-            float3 totalWeight = kernelWeights[0];
+            float totalWeight = kernelWeights[0];
 
             [unroll]
             for (int k = 1; k < 6; k++)
@@ -112,21 +106,45 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
                 float3 tapColT = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, uvT).rgb;
                 float3 tapColB = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, uvB).rgb;
 
-                totalColor += tapColT * (kernelWeights[k] * wT) + tapColB * (kernelWeights[k] * wB);
-                totalWeight += kernelWeights[k] * (wT + wB);
+                totalColor += (tapColT * wT + tapColB * wB) * kernelWeights[k];
+                totalWeight += (wT + wB) * kernelWeights[k];
             }
 
-            float3 blurred = totalColor / max(float3(0.0001, 0.0001, 0.0001), totalWeight);
+            float3 blurred = totalColor / max(0.0001, totalWeight);
 
-            // Physical subsurface diffusion:
-            // Uniform surfaces (like metallic satellite panels) preserve their native material color.
-            // Subsurface color tinting specifically manifests where light bleeds across boundaries!
+            // Subsurface diffusion calculation
             float3 diff = blurred - originalCol.rgb;
-            float3 sssColor = originalCol.rgb + diff * _SubsurfaceColor.rgb;
+
+            float3 tintColor;
+            float scatterMask = 1.0;
+            if (_AutoAdapt > 0.5)
+            {
+                // Material Chrominance Auto-Adaptation:
+                // Computes the local chrominance vector.
+                // On neutral metallic/white satellites (R ≈ G ≈ B), chroma is strictly (1,1,1) -> 0 orange shift!
+                // On Kerbals, chroma captures green subcutaneous glow.
+                // On icy or colored bodies, chroma adapts to the native hue.
+                float luma = max(0.001, dot(originalCol.rgb, float3(0.2126, 0.7152, 0.0722)));
+                float3 chroma = clamp(originalCol.rgb / luma, 0.2, 2.5);
+
+                float maxC = max(originalCol.r, max(originalCol.g, originalCol.b));
+                float minC = min(originalCol.r, min(originalCol.g, originalCol.b));
+                float sat = (maxC - minC) / max(0.01, maxC);
+
+                tintColor = lerp(float3(1.0, 1.0, 1.0), chroma, saturate(sat * 2.0));
+                // Temper diffusion on low-saturation hard metallic surfaces to preserve crisp structural edges
+                scatterMask = lerp(0.35, 1.0, saturate(sat * 2.5));
+            }
+            else
+            {
+                tintColor = _SubsurfaceColor.rgb;
+            }
+
+            float3 sssColor = originalCol.rgb + diff * tintColor;
 
             // Distance smooth fadeout to 0 when approaching _MaxDistance
             float distFade = saturate((_MaxDistance - centerDepth) / max(1.0, _MaxDistance * 0.25));
-            float3 result = lerp(originalCol.rgb, sssColor, _Intensity * distFade);
+            float3 result = lerp(originalCol.rgb, sssColor, _Intensity * distFade * scatterMask);
             return float4(result, originalCol.a);
         }
     ENDHLSL

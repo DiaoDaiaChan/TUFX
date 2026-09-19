@@ -1037,8 +1037,12 @@ namespace TUFX
                 AddFloatParameter("Max Distance (m)", ssss.maxDistance, 2f, 50f);
                 AddFloatParameter("Scatter Radius", ssss.scatterRadius, 0.5f, 15f);
                 AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 1f);
-                AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
-                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Automatically cuts off beyond Max Distance to keep launchpad and terrain razor-sharp.</color></size>");
+                AddBoolParameter("Auto Adapt to Surface", ssss.autoAdapt);
+                if (!ssss.autoAdapt.value)
+                {
+                    AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
+                }
+                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Auto Adapt dynamically matches scattering to surface albedo chrominance, keeping metallic spacecraft clean and neutral while giving Kerbals a rich green subcutaneous glow.</color></size>");
             }
             GUILayout.EndVertical();
         }

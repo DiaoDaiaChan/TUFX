@@ -19,7 +19,10 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(2f, 50f), Tooltip("Maximum distance (meters) for SSSS to activate. Beyond this range, full scene sharpness is preserved.")]
         public FloatParameter maxDistance = new FloatParameter { value = 25.0f };
 
-        [Tooltip("Subsurface scatter tint color (e.g. warm peach for skin/EVA, or cool cyan for polar ice).")]
+        [Tooltip("Automatically adapt subsurface tint to the surface material's native chrominance (keeps satellites neutral, gives Kerbals organic green glow).")]
+        public BoolParameter autoAdapt = new BoolParameter { value = true };
+
+        [Tooltip("Subsurface scatter tint color (used when Auto Adapt is disabled).")]
         public ColorParameter subsurfaceColor = new ColorParameter { value = new Color(1.0f, 0.92f, 0.85f, 1.0f) };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
@@ -33,6 +36,7 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "ScatterRadius", scatterRadius);
             loadFloatParameter(config, "DepthThreshold", depthThreshold);
             loadFloatParameter(config, "MaxDistance", maxDistance);
+            loadBoolParameter(config, "AutoAdapt", autoAdapt);
             loadColorParameter(config, "SubsurfaceColor", subsurfaceColor);
         }
 
@@ -42,6 +46,7 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "ScatterRadius", scatterRadius);
             saveFloatParameter(config, "DepthThreshold", depthThreshold);
             saveFloatParameter(config, "MaxDistance", maxDistance);
+            saveBoolParameter(config, "AutoAdapt", autoAdapt);
             saveColorParameter(config, "SubsurfaceColor", subsurfaceColor);
         }
     }
@@ -78,6 +83,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_ScatterRadius", settings.scatterRadius.value);
             sheet.properties.SetFloat("_DepthThreshold", settings.depthThreshold.value);
             sheet.properties.SetFloat("_MaxDistance", settings.maxDistance.value);
+            sheet.properties.SetFloat("_AutoAdapt", settings.autoAdapt.value ? 1.0f : 0.0f);
             sheet.properties.SetColor("_SubsurfaceColor", settings.subsurfaceColor.value);
 
             int width = context.width;
