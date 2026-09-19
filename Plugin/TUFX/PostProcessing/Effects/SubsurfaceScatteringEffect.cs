@@ -8,16 +8,16 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class SubsurfaceScatteringEffect : PostProcessEffectSettings
     {
         [Range(0f, 1f), Tooltip("Subsurface scattering effect intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 0.4f };
+        public FloatParameter intensity = new FloatParameter { value = 0.65f };
 
         [Range(0.5f, 15f), Tooltip("Diffusion scatter radius.")]
-        public FloatParameter scatterRadius = new FloatParameter { value = 3.5f };
+        public FloatParameter scatterRadius = new FloatParameter { value = 4.0f };
 
-        [Range(0.01f, 0.5f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
-        public FloatParameter depthThreshold = new FloatParameter { value = 0.08f };
+        [Range(0.01f, 1.0f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
+        public FloatParameter depthThreshold = new FloatParameter { value = 0.15f };
 
-        [Range(2f, 50f), Tooltip("Maximum distance (meters) for SSSS to activate. Beyond this range, full scene sharpness is preserved.")]
-        public FloatParameter maxDistance = new FloatParameter { value = 25.0f };
+        [Range(5f, 1000f), Tooltip("Maximum distance (meters) for SSSS to activate. Beyond this range, full scene sharpness is preserved.")]
+        public FloatParameter maxDistance = new FloatParameter { value = 350.0f };
 
         [Tooltip("Automatically adapt subsurface tint to the surface material's native chrominance (keeps satellites neutral, gives Kerbals organic green glow).")]
         public BoolParameter autoAdapt = new BoolParameter { value = true };

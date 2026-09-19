@@ -1195,7 +1195,7 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Intensity", ssss.intensity, 0f, 1f);
-                AddFloatParameter("Max Distance (m)", ssss.maxDistance, 2f, 50f);
+                AddFloatParameter("Max Distance (m)", ssss.maxDistance, 5f, 1000f);
                 AddFloatParameter("Scatter Radius", ssss.scatterRadius, 0.5f, 15f);
                 AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 1f);
                 AddBoolParameter("Auto Adapt to Surface", ssss.autoAdapt);
