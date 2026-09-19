@@ -7,10 +7,10 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class AnamorphicFlare : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Horizontal anamorphic streak intensity.")]
-        public FloatParameter streakIntensity = new FloatParameter { value = 1.0f };
+        public FloatParameter streakIntensity = new FloatParameter { value = 0.8f };
 
         [Range(0.5f, 15f), Tooltip("Streak horizontal spread length.")]
-        public FloatParameter streakLength = new FloatParameter { value = 4.0f };
+        public FloatParameter streakLength = new FloatParameter { value = 3.5f };
 
         [Tooltip("Color tint of the horizontal streak.")]
         public ColorParameter streakColor = new ColorParameter { value = new Color(0.25f, 0.7f, 1.0f, 1.0f) };
@@ -37,10 +37,10 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter spikeLength = new FloatParameter { value = 3.0f };
 
         [Range(0.5f, 15f), Tooltip("Luminance threshold.")]
-        public FloatParameter threshold = new FloatParameter { value = 1.5f };
+        public FloatParameter threshold = new FloatParameter { value = 2.5f };
 
         [Range(0f, 1f), Tooltip("Soft threshold knee to prevent hard specular clipping.")]
-        public FloatParameter softKnee = new FloatParameter { value = 0.5f };
+        public FloatParameter softKnee = new FloatParameter { value = 0.25f };
 
         [Range(5f, 50f), Tooltip("Maximum brightness clamp to prevent specular blowout on metallic surfaces.")]
         public FloatParameter maxBrightness = new FloatParameter { value = 25.0f };
