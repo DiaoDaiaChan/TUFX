@@ -117,7 +117,12 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             }
 
             float3 blurred = totalColor / max(float3(0.0001, 0.0001, 0.0001), totalWeight);
-            float3 sssColor = blurred * _SubsurfaceColor.rgb;
+
+            // Physical subsurface diffusion:
+            // Uniform surfaces (like metallic satellite panels) preserve their native material color.
+            // Subsurface color tinting specifically manifests where light bleeds across boundaries!
+            float3 diff = blurred - originalCol.rgb;
+            float3 sssColor = originalCol.rgb + diff * _SubsurfaceColor.rgb;
 
             // Distance smooth fadeout to 0 when approaching _MaxDistance
             float distFade = saturate((_MaxDistance - centerDepth) / max(1.0, _MaxDistance * 0.25));
