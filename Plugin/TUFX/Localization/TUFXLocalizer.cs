@@ -38,8 +38,6 @@ namespace TUFX
             { "Open ExtendFX Suite (FSR, AgX/ACES, GTAO, SSR) >>", "#LOC_TUFX_Btn_OpenExtendFX" },
             { "<color=#55CCFF><b>[ExtendFX] Next-Gen Advanced Visual Effects & Upgrades</b></color>", "#LOC_TUFX_Title_ExtendFX" },
             { "<< Switch to Stock FX", "#LOC_TUFX_Btn_SwitchToStock" },
-            { "<b>Dynamic Flight Context Adaptation</b>", "#LOC_TUFX_Title_DynamicContext" },
-            { "Enable Real-time Environment Adaptation (Reentry Heat Haze & EVA Mode)", "#LOC_TUFX_Param_EnableDynamicContext" },
             { "Nothing selected", "#LOC_TUFX_Label_NothingSelected" },
             { "Effect: ", "#LOC_TUFX_Label_Effect" },
             { "Property: ", "#LOC_TUFX_Label_Property" },

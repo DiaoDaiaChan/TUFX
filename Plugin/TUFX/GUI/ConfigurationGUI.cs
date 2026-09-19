@@ -318,19 +318,7 @@ namespace TUFX
             // 13. Screen Space Subsurface Scattering (SSSS Translucent Glow)
             renderSubsurfaceScatteringSettings();
 
-            // 14. Dynamic Flight Context Adaptation Toggle
-            renderDynamicContextSettings();
-
             GUILayout.EndScrollView();
-        }
-
-        private void renderDynamicContextSettings()
-        {
-            GUILayout.BeginVertical(HighLogic.Skin.box);
-            GUILayout.Label("<b>Dynamic Flight Context Adaptation</b>".Localize());
-            TUFXDynamicContextManager.Enabled = GUILayout.Toggle(TUFXDynamicContextManager.Enabled, "Enable Real-time Environment Adaptation (Reentry Heat Haze & EVA Mode)".Localize());
-            GUILayout.Label("#LOC_TUFX_Desc_DynamicContext".Localize("<size=10><color=grey>Smoothly controls heat distortion during hypersonic reentry (Mach > 3) and astronaut visor curvature.</color></size>"));
-            GUILayout.EndVertical();
         }
 
         private void renderTextureSelectWindow()
