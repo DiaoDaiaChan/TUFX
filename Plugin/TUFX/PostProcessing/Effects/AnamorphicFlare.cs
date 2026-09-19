@@ -7,7 +7,7 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class AnamorphicFlare : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Horizontal anamorphic streak intensity.")]
-        public FloatParameter streakIntensity = new FloatParameter { value = 0.8f };
+        public FloatParameter streakIntensity = new FloatParameter { value = 1.2f };
 
         [Range(0.5f, 15f), Tooltip("Streak horizontal spread length.")]
         public FloatParameter streakLength = new FloatParameter { value = 3.5f };
@@ -37,10 +37,10 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter spikeLength = new FloatParameter { value = 3.0f };
 
         [Range(0.5f, 15f), Tooltip("Luminance threshold.")]
-        public FloatParameter threshold = new FloatParameter { value = 2.5f };
+        public FloatParameter threshold = new FloatParameter { value = 1.30f };
 
         [Range(0f, 1f), Tooltip("Soft threshold knee to prevent hard specular clipping.")]
-        public FloatParameter softKnee = new FloatParameter { value = 0.25f };
+        public FloatParameter softKnee = new FloatParameter { value = 0.15f };
 
         [Range(5f, 50f), Tooltip("Maximum brightness clamp to prevent specular blowout on metallic surfaces.")]
         public FloatParameter maxBrightness = new FloatParameter { value = 25.0f };
@@ -129,14 +129,14 @@ namespace UnityEngine.Rendering.PostProcessing
 
             var sheet = context.propertySheets.Get(shader);
 
-            // Soft-knee threshold setup
-            float lthresh = Mathf.GammaToLinearSpace(settings.threshold.value);
+            // Soft-knee threshold setup (direct linear HDR threshold)
+            float lthresh = Mathf.Max(0.1f, settings.threshold.value);
             float knee = lthresh * Mathf.Clamp01(settings.softKnee.value) + 1e-5f;
             var thresholdVec = new Vector4(lthresh, lthresh - knee, knee * 2f, 0.25f / knee);
             sheet.properties.SetVector("_ThresholdParams", thresholdVec);
 
             sheet.properties.SetVector("_FlareParams", new Vector4(
-                Mathf.GammaToLinearSpace(settings.maxBrightness.value),
+                Mathf.Max(1.0f, settings.maxBrightness.value),
                 settings.streakLength.value,
                 settings.dispersion.value,
                 0f

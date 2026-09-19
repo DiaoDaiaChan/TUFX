@@ -16,8 +16,9 @@ Shader "Hidden/TUFX/GodRays"
         float _Intensity;
         float4 _RayColor;
 
-        // Pass 0: Procedural Sun Light Source with Scene Depth Occlusion
-        // Only the Sun emits God Rays; spacecraft and engines can ONLY block light (casting shadows)
+        // Pass 0: Sun Light Source Extraction with Scene Depth Occlusion
+        // Extracts the Sun light source using _Threshold, so God Rays can trigger
+        // at natural, moderate brightness without needing an overexposed blinding sun!
         float4 FragExtract(VaryingsDefault i) : SV_Target
         {
             if (_SunVisible <= 0.0)
@@ -28,16 +29,11 @@ Shader "Hidden/TUFX/GodRays"
             float2 sunVec = (i.texcoord - _SunScreenPos) * float2(_MainTex_TexelSize.z / _MainTex_TexelSize.w, 1.0);
             float sunDist = length(sunVec);
 
-            // Confine procedural solar light disc and corona
-            if (sunDist > 0.35)
+            // Confine solar source to natural celestial scale (max 0.12, instead of bloated 0.35)
+            if (sunDist > 0.12)
             {
                 return float4(0, 0, 0, 0);
             }
-
-            // Core solar disc + exponential corona
-            float sunDisc = saturate((0.04 - sunDist) / 0.015) * 3.0;
-            float sunCorona = exp(-sunDist * 14.0) * 1.2;
-            float sunSource = sunDisc + sunCorona;
 
             // Depth occlusion: spacecraft, vessels, and terrain block the Sun
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
@@ -47,11 +43,32 @@ Shader "Hidden/TUFX/GodRays"
                 bool isSky = (rawDepth >= 0.9999);
             #endif
             float linearDepth = LinearEyeDepth(rawDepth);
-
-            // If an object is closer than 3000m and not sky, it fully blocks the sun
             float occl = (isSky || linearDepth > 3000.0) ? 1.0 : saturate((linearDepth - 20.0) / 100.0);
 
-            return float4(sunSource * occl, sunSource * occl, sunSource * occl, 1.0);
+            if (occl <= 0.001)
+            {
+                return float4(0, 0, 0, 0);
+            }
+
+            // Sample actual scene color around the sun
+            float4 sceneCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+            float luma = dot(sceneCol.rgb, float3(0.2126, 0.7152, 0.0722));
+
+            // Normalized threshold extraction:
+            // Triggers easily at moderate sun brightness (e.g. luma >= _Threshold)
+            // without requiring the sun to be artificially overexposed to crazy values!
+            float extracted = max(0.0, luma - _Threshold);
+            float normSource = saturate(extracted / max(0.15, 1.2 - _Threshold));
+
+            // Celestial anchor disc (tight, radius 0.018) + soft inner corona (radius 0.08)
+            float sunDisc = saturate((0.018 - sunDist) / 0.008) * 1.0;
+            float sunCorona = exp(-sunDist * 32.0) * 0.7;
+            float anchorSource = sunDisc + sunCorona;
+
+            // Combine scene brightness with solar anchor so god rays always emerge cleanly
+            float sunSource = max(normSource, anchorSource) * occl;
+
+            return float4(sunSource, sunSource, sunSource, 1.0);
         }
 
         // Pass 1: Radial blur marching towards the Sun with continuous IGN jitter
@@ -82,12 +99,29 @@ Shader "Hidden/TUFX/GodRays"
             return float4(color * (_Intensity * _RayColor.rgb), 1.0);
         }
 
-        // Pass 2: Additive Composite
+        // Pass 2: Anti-Blowout Tone-Protected Composite
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float3 rays = SAMPLE_TEXTURE2D(_RaysTex, sampler_MainTex, i.texcoord).rgb;
-            return float4(scene.rgb + rays, scene.a);
+
+            // Core sun disc protection:
+            // Light shafts stream OUTWARD from the sun; don't double-expose the sun center into a nuclear blob!
+            float2 sunVec = (i.texcoord - _SunScreenPos) * float2(_MainTex_TexelSize.z / _MainTex_TexelSize.w, 1.0);
+            float sunDist = length(sunVec);
+            float coreDamp = smoothstep(0.005, 0.035, sunDist);
+
+            // Hard clamp on rays to prevent triggering wild bloom blowout
+            rays = min(rays, 1.8);
+
+            // Highlight protection:
+            // In deep space / atmospheric shadow: rays shine through brilliantly with full volumetric contrast.
+            // In already saturated bright sky: soft roll-off prevents overexposing to solid white!
+            float sceneLuma = dot(scene.rgb, float3(0.2126, 0.7152, 0.0722));
+            float highlightRollOff = saturate(1.0 - sceneLuma * 0.35);
+
+            float3 finalRays = rays * lerp(coreDamp, 1.0, 0.2) * highlightRollOff;
+            return float4(scene.rgb + finalRays, scene.a);
         }
     ENDHLSL
 

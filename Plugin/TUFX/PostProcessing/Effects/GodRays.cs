@@ -8,13 +8,13 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class GodRays : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("God rays brightness intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 1.2f };
+        public FloatParameter intensity = new FloatParameter { value = 0.85f };
 
         [Range(0f, 1f), Tooltip("Residual optical lens corona intensity in vacuum/space (0 = off, 0.45 = crisp space corona).")]
         public FloatParameter spaceIntensity = new FloatParameter { value = 0.45f };
 
         [Range(0.1f, 2f), Tooltip("Luminance threshold to extract sunlight sources.")]
-        public FloatParameter threshold = new FloatParameter { value = 0.65f };
+        public FloatParameter threshold = new FloatParameter { value = 0.45f };
 
         [Range(0.1f, 2f), Tooltip("Ray sampling density.")]
         public FloatParameter density = new FloatParameter { value = 0.85f };
@@ -23,7 +23,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter decay = new FloatParameter { value = 0.95f };
 
         [Range(0.05f, 1f), Tooltip("Sampling weight.")]
-        public FloatParameter weight = new FloatParameter { value = 0.4f };
+        public FloatParameter weight = new FloatParameter { value = 0.25f };
 
         [Tooltip("Sunlight ray color tint.")]
         public ColorParameter rayColor = new ColorParameter { value = new Color(1.0f, 0.95f, 0.85f, 1.0f) };
@@ -120,7 +120,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Density", settings.density.value);
             sheet.properties.SetFloat("_Decay", settings.decay.value);
             sheet.properties.SetFloat("_Weight", settings.weight.value);
-            sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor * 1.5f);
+            sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor);
             sheet.properties.SetColor("_RayColor", settings.rayColor.value);
 
             int width = context.width / 2;
