@@ -11,6 +11,7 @@ Shader "Hidden/TUFX/CameraMotionBlur"
         float4x4 _CurrInvViewProj;
         float4x4 _PrevViewProj;
         float _ShutterScale;
+        float _BlurMultiplier;
         float _MaxBlurRadius;
         float _UseMotionVectors;
         int _SampleCount;
@@ -29,9 +30,22 @@ Shader "Hidden/TUFX/CameraMotionBlur"
             float2 ndcUV = uv * 2.0 - 1.0;
             #endif
 
-            float4 clipPos = float4(ndcUV, rawDepth, 1.0);
+            // Sky / Deep Space handling (far plane in reversed-Z or standard-Z)
+            #if UNITY_REVERSED_Z
+            bool isSky = (rawDepth <= 0.0001);
+            #else
+            bool isSky = (rawDepth >= 0.9999);
+            #endif
+
+            float4 clipPos = float4(ndcUV, isSky ? 0.0005 : rawDepth, 1.0);
             float4 worldH = mul(_CurrInvViewProj, clipPos);
             float3 worldPos = worldH.xyz / max(0.00001, worldH.w);
+
+            if (isSky)
+            {
+                // Starfield / Deep space at infinity: project rotational ray
+                worldPos = normalize(worldPos) * 100000.0;
+            }
 
             float4 prevClip = mul(_PrevViewProj, float4(worldPos, 1.0));
             float2 prevNDC = prevClip.xy / max(0.00001, prevClip.w);
@@ -42,7 +56,7 @@ Shader "Hidden/TUFX/CameraMotionBlur"
             float2 prevUV = prevNDC * 0.5 + 0.5;
             #endif
 
-            float2 velocity = (uv - prevUV) * _ShutterScale;
+            float2 velocity = (uv - prevUV) * (_ShutterScale * _BlurMultiplier);
             return velocity;
         }
 
@@ -56,7 +70,7 @@ Shader "Hidden/TUFX/CameraMotionBlur"
                 float2 mv = SAMPLE_TEXTURE2D(_CameraMotionVectorsTexture, sampler_CameraMotionVectorsTexture, i.texcoord).rg;
                 if (dot(mv, mv) > 0.0000001)
                 {
-                    velocity = mv * _ShutterScale;
+                    velocity = mv * (_ShutterScale * _BlurMultiplier);
                 }
                 else
                 {
@@ -70,8 +84,8 @@ Shader "Hidden/TUFX/CameraMotionBlur"
 
             float speed = length(velocity);
 
-            // Early exit if velocity is virtually zero
-            if (speed < 0.0003)
+            // Subpixel early exit
+            if (speed < 0.0002)
             {
                 return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             }
@@ -98,13 +112,16 @@ Shader "Hidden/TUFX/CameraMotionBlur"
                 float t = ((float(s) + jitter) / float(samples)) - 0.5;
                 float2 sampleUV = i.texcoord + velocity * t;
 
-                // Edge weight falloff
-                float w = 1.0 - abs(t) * 0.4;
-                col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, sampleUV) * w;
+                // Border clamp
+                sampleUV = clamp(sampleUV, 0.001, 0.999);
+
+                // Triangular weight centered at current pixel
+                float w = 1.0 - abs(t * 2.0);
+                col += SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 0.0) * w;
                 totalWeight += w;
             }
 
-            return col / totalWeight;
+            return col / max(0.0001, totalWeight);
         }
     ENDHLSL
 

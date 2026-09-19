@@ -34,7 +34,7 @@ Shader "Hidden/TUFX/ContactShadows"
             #endif
 
             float linearDepth = LinearEyeDepth(rawDepth);
-            if (linearDepth <= 0.01)
+            if (linearDepth <= 0.01 || linearDepth > 2000.0)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
@@ -53,7 +53,6 @@ Shader "Hidden/TUFX/ContactShadows"
 
             float3 dx = rightPos - leftPos;
             float3 dy = topPos - botPos;
-            // Cross product: Top x Right points towards camera in our left-handed view space
             float3 normal = cross(dy, dx);
             float lenSq = dot(normal, normal);
             if (lenSq > 0.0001)
@@ -74,20 +73,23 @@ Shader "Hidden/TUFX/ContactShadows"
             float3 rayDir = normalize(_LightDirView);
             float NdotL = dot(normal, rayDir);
 
-            // Backside or steep grazing angle surfaces cannot receive direct sunlight contact shadows.
-            // Smoothly fade out when approaching terminator to eliminate edge acne.
+            // Fade smoothly when surface faces away from sunlight
             if (NdotL <= 0.0)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
-            float lightFacing = saturate(NdotL * 5.0);
+            float lightFacing = saturate(NdotL * 4.0);
 
-            // Normal bias pushes ray origin slightly above the surface, preventing curved surfaces from self-shadowing
-            float normalBias = max(0.003, linearDepth * 0.0015);
+            // Adaptive distance scaling: micro-shadows close up, meters-scale shadows at distance
+            float adaptiveThickness = max(_Thickness, linearDepth * 0.008);
+            float adaptiveRayLength = max(_RayLength, linearDepth * 0.02);
+
+            // Normal bias to push ray origin out of surface self-intersection
+            float normalBias = max(0.003, adaptiveThickness * 0.12);
             float3 originPos = centerPos + normal * normalBias;
 
-            // Project 3D end position to screen UV without relying on inversion-prone projection matrices
-            float3 endPos = originPos + rayDir * _RayLength;
+            // March towards light source in view space
+            float3 endPos = originPos + rayDir * adaptiveRayLength;
             if (endPos.z <= 0.01) return float4(1.0, 1.0, 1.0, 1.0);
 
             float2 startUV;
@@ -102,19 +104,21 @@ Shader "Hidden/TUFX/ContactShadows"
             float2 rayPixelDelta = rayDeltaUV * _MainTex_TexelSize.zw;
             float rayPixelDist = length(rayPixelDelta);
 
-            // Subpixel early-out: if ray is shorter than 1.5 pixels, contact shadows cannot be resolved
-            if (rayPixelDist < 1.5)
+            // Subpixel smooth fade out instead of hard early-out
+            float pixelWeight = saturate((rayPixelDist - 0.5) / 2.5);
+            if (pixelWeight <= 0.001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            // High-frequency dither to eliminate banding
+            // High-frequency dither
             float dither = frac(52.9829189 * frac(dot(i.texcoord * _MainTex_TexelSize.zw, float2(0.06711056, 0.00583715))));
 
             float invZ_start = 1.0 / originPos.z;
             float invZ_end   = 1.0 / endPos.z;
 
-            float bias = max(0.006, linearDepth * 0.002);
+            // Bias is strictly a fraction of adaptive thickness (always guaranteed to be < adaptiveThickness)
+            float bias = adaptiveThickness * 0.10 + 0.001;
             float occlusion = 0.0;
 
             [unroll(16)]
@@ -138,21 +142,15 @@ Shader "Hidden/TUFX/ContactShadows"
                 float expectedDepth = 1.0 / lerp(invZ_start, invZ_end, t);
                 float depthDiff = expectedDepth - sampleLinearDepth;
 
-                if (depthDiff > bias && depthDiff < _Thickness)
+                if (depthDiff > bias && depthDiff < adaptiveThickness)
                 {
-                    float occl = 1.0 - saturate(depthDiff / _Thickness);
+                    float occl = 1.0 - saturate(depthDiff / adaptiveThickness);
                     occlusion = max(occlusion, occl);
                     break;
                 }
             }
 
-            // Smooth scale-independent pixel-span fade out
-            if (rayPixelDist < 5.0)
-            {
-                float pixelFade = saturate((rayPixelDist - 1.5) / 3.5);
-                occlusion *= pixelFade;
-            }
-
+            occlusion *= pixelWeight;
             float shadow = 1.0 - occlusion * _Intensity * lightFacing;
             return float4(shadow, shadow, shadow, 1.0);
         }
@@ -169,7 +167,7 @@ Shader "Hidden/TUFX/ContactShadows"
             #endif
 
             float centerDepth = LinearEyeDepth(rawDepth);
-            float2 texel = _MainTex_TexelSize.xy * 1.25;
+            float2 texel = _MainTex_TexelSize.xy * 1.5;
 
             float sum = centerShadow;
             float totalWeight = 1.0;
@@ -183,27 +181,27 @@ Shader "Hidden/TUFX/ContactShadows"
             for (int k = 0; k < 4; k++)
             {
                 float2 uv = i.texcoord + offsets[k] * texel;
-                float tapDepth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv));
-                float depthDiff = abs(centerDepth - tapDepth);
+                float sampleShadow = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).r;
+                float sampleRaw = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv);
+                float sampleDepth = LinearEyeDepth(sampleRaw);
 
-                float weight = exp(-depthDiff / max(0.01, centerDepth * 0.02));
-                float tapShadow = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).r;
+                float depthDiff = abs(centerDepth - sampleDepth);
+                float w = exp(-depthDiff / max(0.05, centerDepth * 0.04));
 
-                sum += tapShadow * weight;
-                totalWeight += weight;
+                sum += sampleShadow * w;
+                totalWeight += w;
             }
 
             float filtered = sum / max(0.001, totalWeight);
             return float4(filtered, filtered, filtered, 1.0);
         }
 
-        // Pass 2: Composite Shadow with Scene Color
-        float4 FragComposite(VaryingsDefault i) : SV_Target
+        // Pass 2: Composite Contact Shadows with Scene
+        float4 FragContactShadowComposite(VaryingsDefault i) : SV_Target
         {
-            float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+            float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, i.texcoord).r;
-            shadow = saturate(shadow);
-            return float4(col.rgb * shadow, col.a);
+            return float4(scene.rgb * shadow, scene.a);
         }
     ENDHLSL
 
@@ -234,7 +232,7 @@ Shader "Hidden/TUFX/ContactShadows"
         {
             HLSLPROGRAM
                 #pragma vertex VertDefault
-                #pragma fragment FragComposite
+                #pragma fragment FragContactShadowComposite
             ENDHLSL
         }
     }

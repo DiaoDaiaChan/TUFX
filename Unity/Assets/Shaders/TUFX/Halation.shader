@@ -4,58 +4,81 @@ Shader "Hidden/TUFX/Halation"
         #include "Packages/com.unity.postprocessing/PostProcessing/Shaders/StdLib.hlsl"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
-        TEXTURE2D_SAMPLER2D(_HalationTex, sampler_HalationTex);
+        TEXTURE2D_SAMPLER2D(_HalationTightTex, sampler_HalationTightTex);
+        TEXTURE2D_SAMPLER2D(_HalationWideTex, sampler_HalationWideTex);
         float4 _MainTex_TexelSize;
         float _Threshold;
         float _Intensity;
         float _Radius;
-        float4 _ColorTint; // Default warm orange/red: float4(1.0, 0.35, 0.1, 1.0)
+        float4 _ColorTint; // CineStill warm orange-red: float4(1.0, 0.28, 0.10, 1.0)
 
-        // Pass 0: Brightness extraction and red-tint filtering
+        // Pass 0: Soft-Knee Threshold Extraction & Red Emulsion Tinting
         float4 FragExtract(VaryingsDefault i) : SV_Target
         {
             float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float luma = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
-            float factor = saturate((luma - _Threshold) / max(0.001, _Threshold));
-            
-            // Emulate red-light penetration in film emulsion
-            float3 halationColor = color.rgb * _ColorTint.rgb * factor;
-            return float4(halationColor, 1.0);
+
+            // Soft-knee threshold to prevent harsh cutoffs
+            float val = max(0.0, luma - _Threshold);
+            float factor = saturate(val / max(0.1, _Threshold * 0.6));
+
+            // Red layer penetration in film base
+            float3 halationSeed = color.rgb * _ColorTint.rgb * factor;
+            return float4(halationSeed, 1.0);
         }
 
-        // Pass 1: Horizontal blur (7-tap normalized Gaussian)
+        // Pass 1: Horizontal Gaussian Diffusion (9-tap normalized)
         float4 FragBlurH(VaryingsDefault i) : SV_Target
         {
-            float2 step = float2(_MainTex_TexelSize.x * _Radius, 0.0);
-            float4 col = float4(0, 0, 0, 0);
-            
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 3.0) * 0.00598;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 2.0) * 0.0606;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 1.0) * 0.2418;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord)              * 0.3831;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 1.0) * 0.2418;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 2.0) * 0.0606;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 3.0) * 0.00598;
-            
-            return col;
+            static const float weights[5] = { 0.2270270, 0.1945946, 0.1216216, 0.0540541, 0.0162162 };
+            float stepX = _MainTex_TexelSize.x * _Radius;
+
+            float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
+
+            [unroll]
+            for (int t = 1; t <= 4; t++)
+            {
+                float w = weights[t];
+                float offset = float(t) * stepX;
+                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(offset, 0.0)).rgb;
+                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(offset, 0.0)).rgb;
+                col += (s1 + s2) * w;
+            }
+
+            return float4(col, 1.0);
         }
 
-        // Pass 2: Vertical blur and composite
+        // Pass 2: Vertical Gaussian Diffusion (9-tap normalized)
+        float4 FragBlurV(VaryingsDefault i) : SV_Target
+        {
+            static const float weights[5] = { 0.2270270, 0.1945946, 0.1216216, 0.0540541, 0.0162162 };
+            float stepY = _MainTex_TexelSize.y * _Radius;
+
+            float3 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).rgb * weights[0];
+
+            [unroll]
+            for (int t = 1; t <= 4; t++)
+            {
+                float w = weights[t];
+                float offset = float(t) * stepY;
+                float3 s1 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + float2(0.0, offset)).rgb;
+                float3 s2 = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - float2(0.0, offset)).rgb;
+                col += (s1 + s2) * w;
+            }
+
+            return float4(col, 1.0);
+        }
+
+        // Pass 3: Dual-Scale Halation Composite onto Scene
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
-            float2 step = float2(0.0, _MainTex_TexelSize.y * _Radius);
-            float4 blur = float4(0, 0, 0, 0);
+            float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+            float3 tightGlow = SAMPLE_TEXTURE2D(_HalationTightTex, sampler_HalationTightTex, i.texcoord).rgb;
+            float3 wideBleed = SAMPLE_TEXTURE2D(_HalationWideTex, sampler_HalationWideTex, i.texcoord).rgb;
 
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 3.0) * 0.00598;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 2.0) * 0.0606;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 1.0) * 0.2418;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord)              * 0.3831;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 1.0) * 0.2418;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 2.0) * 0.0606;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 3.0) * 0.00598;
-
-            float4 orig = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            return orig + blur * _Intensity;
+            // CineStill 800T characteristic: sharp red boundary glow + broad warm halo
+            float3 halation = (tightGlow * 0.5 + wideBleed * 0.75) * (_Intensity * _ColorTint.rgb);
+            return float4(scene.rgb + halation, scene.a);
         }
     ENDHLSL
 
@@ -81,7 +104,16 @@ Shader "Hidden/TUFX/Halation"
             ENDHLSL
         }
 
-        // 2: Blur V & Composite
+        // 2: Blur V
+        Pass
+        {
+            HLSLPROGRAM
+                #pragma vertex VertDefault
+                #pragma fragment FragBlurV
+            ENDHLSL
+        }
+
+        // 3: Composite
         Pass
         {
             HLSLPROGRAM

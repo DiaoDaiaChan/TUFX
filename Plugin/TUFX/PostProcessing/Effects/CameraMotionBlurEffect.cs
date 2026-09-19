@@ -22,11 +22,14 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0f, 360f), Tooltip("The rotary shutter opening angle in degrees. 180 = standard cinema, 270 = action sport, 90 = sharp crisp.")]
         public FloatParameter shutterAngle = new FloatParameter { value = 180f };
 
+        [Range(0.5f, 5.0f), Tooltip("Motion blur intensity multiplier for cinematic speed streaks.")]
+        public FloatParameter blurMultiplier = new FloatParameter { value = 1.5f };
+
         [Range(4, 16), Tooltip("Number of velocity blur samples along the motion vector.")]
         public IntParameter sampleCount = new IntParameter { value = 8 };
 
-        [Range(5f, 64f), Tooltip("Maximum motion blur radius in pixels.")]
-        public FloatParameter maxBlurPixels = new FloatParameter { value = 32f };
+        [Range(10f, 128f), Tooltip("Maximum motion blur radius in pixels.")]
+        public FloatParameter maxBlurPixels = new FloatParameter { value = 48f };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
@@ -37,6 +40,7 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             loadEnumParameter(config, "Mode", mode, typeof(MotionBlurSource));
             loadFloatParameter(config, "ShutterAngle", shutterAngle);
+            loadFloatParameter(config, "BlurMultiplier", blurMultiplier);
             loadIntParameter(config, "SampleCount", sampleCount);
             loadFloatParameter(config, "MaxBlurPixels", maxBlurPixels);
         }
@@ -45,6 +49,7 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             saveEnumParameter(config, "Mode", mode);
             saveFloatParameter(config, "ShutterAngle", shutterAngle);
+            saveFloatParameter(config, "BlurMultiplier", blurMultiplier);
             saveIntParameter(config, "SampleCount", sampleCount);
             saveFloatParameter(config, "MaxBlurPixels", maxBlurPixels);
         }
@@ -90,6 +95,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetMatrix("_CurrInvViewProj", currInvViewProj);
             sheet.properties.SetMatrix("_PrevViewProj", m_PrevViewProj);
             sheet.properties.SetFloat("_ShutterScale", shutterScale);
+            sheet.properties.SetFloat("_BlurMultiplier", settings.blurMultiplier.value);
             sheet.properties.SetFloat("_MaxBlurRadius", settings.maxBlurPixels.value);
             sheet.properties.SetInt("_SampleCount", settings.sampleCount.value);
             sheet.properties.SetFloat("_UseMotionVectors", useMotionVectors ? 1.0f : 0.0f);

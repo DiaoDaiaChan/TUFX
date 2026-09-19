@@ -158,7 +158,10 @@ Shader "Hidden/TUFX/SSGI"
                     float sampleEyeDepth = LinearEyeDepth(sampleRawDepth);
 
                     float depthDelta = marchPos.z - sampleEyeDepth;
-                    if (depthDelta > 0.02 && depthDelta < _Thickness)
+                    float adaptiveThickness = max(_Thickness, marchPos.z * 0.025);
+                    float bias = max(0.015, adaptiveThickness * 0.05);
+
+                    if (depthDelta > bias && depthDelta < adaptiveThickness)
                     {
                         // Ray hit geometry! Sample irradiance from hit position
                         float3 hitColor = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, sampleUV, 1.0).rgb;
@@ -245,7 +248,7 @@ Shader "Hidden/TUFX/SSGI"
                 albedo = saturate(scene.rgb * 1.2);
             }
 
-            float3 bounce = indirect * albedo * (_Intensity * _BounceColor.rgb);
+            float3 bounce = indirect * (albedo * 0.7 + 0.3) * (_Intensity * _BounceColor.rgb * 1.8);
             return float4(scene.rgb + bounce, scene.a);
         }
 

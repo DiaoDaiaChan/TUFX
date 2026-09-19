@@ -879,10 +879,11 @@ namespace TUFX
             bool showProps = AddEffectHeader("Contact Shadows", out ContactShadows cs);
             if (showProps)
             {
-                AddFloatParameter("Ray Length", cs.rayLength, 0.01f, 1f);
+                AddFloatParameter("Ray Length", cs.rayLength, 0.05f, 3f);
                 AddIntParameter("Steps", cs.raySteps, 4, 16);
                 AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
-                AddFloatParameter("Thickness", cs.thickness, 0.005f, 0.1f);
+                AddFloatParameter("Thickness", cs.thickness, 0.02f, 0.6f);
+                GUILayout.Label("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages and landing gear.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -893,6 +894,7 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Intensity", gr.intensity, 0f, 5f);
+                AddFloatParameter("Threshold", gr.threshold, 0.1f, 2f);
                 AddFloatParameter("Density", gr.density, 0.1f, 2f);
                 AddFloatParameter("Decay", gr.decay, 0.8f, 0.99f);
                 AddFloatParameter("Weight", gr.weight, 0.05f, 1f);
@@ -953,9 +955,10 @@ namespace TUFX
             {
                 AddEnumParameter("Source", cmb.mode);
                 AddFloatParameter("Shutter Angle", cmb.shutterAngle, 0f, 360f);
+                AddFloatParameter("Blur Multiplier", cmb.blurMultiplier, 0.5f, 5f);
                 AddIntParameter("Samples", cmb.sampleCount, 4, 16);
-                AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 5f, 64f);
-                GUILayout.Label("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors for smooth cinematic shutter motion blur in high-angular speed maneuvers.</color></size>");
+                AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 10f, 128f);
+                GUILayout.Label("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors. Blur Multiplier boosts high-speed atmospheric flight streaks and camera spin.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -997,9 +1000,13 @@ namespace TUFX
             bool showProps = AddEffectHeader("Heat Distortion", out HeatDistortionEffect hd);
             if (showProps)
             {
+                AddEnumParameter("Mode", hd.mode);
                 AddFloatParameter("Intensity", hd.intensity, 0f, 2f);
                 AddFloatParameter("Speed", hd.speed, 0.2f, 10f);
                 AddFloatParameter("Scale", hd.scale, 1f, 30f);
+                AddFloatParameter("Plume Threshold", hd.plumeThreshold, 0.5f, 10f);
+                AddFloatParameter("Ground Altitude Limit", hd.groundAltitudeLimit, 100f, 3000f);
+                GUILayout.Label("<size=10><color=grey>AutoAdaptive mode confines turbulence to engine plumes and low-altitude terrain shimmer, keeping vehicle & sky clear.</color></size>");
             }
             GUILayout.EndVertical();
         }
@@ -1009,11 +1016,11 @@ namespace TUFX
             bool showProps = AddEffectHeader("Screen Space Global Illumination (SSGI)", out SSGIEffect ssgi);
             if (showProps)
             {
-                AddFloatParameter("Intensity", ssgi.intensity, 0f, 4f);
+                AddFloatParameter("Intensity", ssgi.intensity, 0f, 5f);
                 AddIntParameter("Ray Count", ssgi.rayCount, 2, 8);
                 AddIntParameter("Ray Steps", ssgi.raySteps, 4, 16);
-                AddFloatParameter("Ray Length (m)", ssgi.rayLength, 0.5f, 20f);
-                AddFloatParameter("Thickness", ssgi.thickness, 0.1f, 3f);
+                AddFloatParameter("Ray Length (m)", ssgi.rayLength, 0.5f, 30f);
+                AddFloatParameter("Thickness", ssgi.thickness, 0.1f, 5f);
                 AddColorParameter("Bounce Color", ssgi.bounceColor);
                 GUILayout.Label("<size=10><color=grey>Single-bounce screen-space diffuse indirect illumination & realistic color bleeding from terrain and nearby vehicle hulls.</color></size>");
             }
@@ -1026,8 +1033,8 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Intensity", ssss.intensity, 0f, 1f);
-                AddFloatParameter("Scatter Radius (mm)", ssss.scatterRadius, 0.1f, 10f);
-                AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 0.5f);
+                AddFloatParameter("Scatter Radius", ssss.scatterRadius, 0.5f, 15f);
+                AddFloatParameter("Depth Threshold", ssss.depthThreshold, 0.01f, 1f);
                 AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
                 GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency and icy celestial body jade-like subsurface glow.</color></size>");
             }

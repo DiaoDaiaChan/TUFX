@@ -7,8 +7,8 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(SSGIRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space Global Illumination (SSGI)", sortingPriority: 22)]
     public sealed class SSGIEffect : PostProcessEffectSettings
     {
-        [Range(0f, 4f), Tooltip("Global illumination bounce brightness multiplier.")]
-        public FloatParameter intensity = new FloatParameter { value = 1.0f };
+        [Range(0f, 5f), Tooltip("Global illumination bounce brightness multiplier.")]
+        public FloatParameter intensity = new FloatParameter { value = 2.0f };
 
         [Range(2, 8), Tooltip("Number of hemisphere rays per pixel.")]
         public IntParameter rayCount = new IntParameter { value = 4 };
@@ -16,11 +16,11 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(4, 16), Tooltip("Number of march steps per ray.")]
         public IntParameter raySteps = new IntParameter { value = 8 };
 
-        [Range(0.5f, 20f), Tooltip("Maximum distance indirect light can bounce (meters).")]
-        public FloatParameter rayLength = new FloatParameter { value = 5.0f };
+        [Range(0.5f, 30f), Tooltip("Maximum distance indirect light can bounce (meters).")]
+        public FloatParameter rayLength = new FloatParameter { value = 12.0f };
 
-        [Range(0.1f, 3f), Tooltip("Geometry thickness acceptance threshold.")]
-        public FloatParameter thickness = new FloatParameter { value = 1.0f };
+        [Range(0.1f, 5f), Tooltip("Geometry thickness acceptance threshold.")]
+        public FloatParameter thickness = new FloatParameter { value = 1.2f };
 
         [Tooltip("Custom indirect bounce tint color.")]
         public ColorParameter bounceColor = new ColorParameter { value = Color.white };

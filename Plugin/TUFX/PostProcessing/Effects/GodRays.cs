@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
@@ -7,7 +8,10 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class GodRays : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("God rays brightness intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 1.0f };
+        public FloatParameter intensity = new FloatParameter { value = 1.2f };
+
+        [Range(0.1f, 2f), Tooltip("Luminance threshold to extract sunlight sources.")]
+        public FloatParameter threshold = new FloatParameter { value = 0.65f };
 
         [Range(0.1f, 2f), Tooltip("Ray sampling density.")]
         public FloatParameter density = new FloatParameter { value = 0.85f };
@@ -19,7 +23,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public FloatParameter weight = new FloatParameter { value = 0.4f };
 
         [Tooltip("Sunlight ray color tint.")]
-        public ColorParameter rayColor = new ColorParameter { value = new Color(1.0f, 0.96f, 0.88f, 1.0f) };
+        public ColorParameter rayColor = new ColorParameter { value = new Color(1.0f, 0.95f, 0.85f, 1.0f) };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
@@ -29,6 +33,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public override void Load(ConfigNode config)
         {
             loadFloatParameter(config, "Intensity", intensity);
+            loadFloatParameter(config, "Threshold", threshold);
             loadFloatParameter(config, "Density", density);
             loadFloatParameter(config, "Decay", decay);
             loadFloatParameter(config, "Weight", weight);
@@ -38,6 +43,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public override void Save(ConfigNode config)
         {
             saveFloatParameter(config, "Intensity", intensity);
+            saveFloatParameter(config, "Threshold", threshold);
             saveFloatParameter(config, "Density", density);
             saveFloatParameter(config, "Decay", decay);
             saveFloatParameter(config, "Weight", weight);
@@ -66,48 +72,41 @@ namespace UnityEngine.Rendering.PostProcessing
                 return;
             }
 
-            // Accurate Sun world direction from primary directional light
+            // Accurate Sun world direction: prefer true astronomical Sun body
             Vector3 sunDirWorld = Vector3.forward;
-            Light[] lights = Light.GetLights(LightType.Directional, 0);
-            for (int i = 0; i < lights.Length; i++)
+            if (Planetarium.fetch != null && Planetarium.fetch.Sun != null && context.camera != null)
             {
-                if (lights[i].isActiveAndEnabled)
+                Vector3d camPosD = (Vector3d)context.camera.transform.position;
+                Vector3d sunPosD = Planetarium.fetch.Sun.position;
+                sunDirWorld = (Vector3)(sunPosD - camPosD).normalized;
+            }
+            else if (RenderSettings.sun != null)
+            {
+                sunDirWorld = -RenderSettings.sun.transform.forward;
+            }
+            else
+            {
+                Light[] lights = Light.GetLights(LightType.Directional, 0);
+                for (int i = 0; i < lights.Length; i++)
                 {
-                    sunDirWorld = -lights[i].transform.forward;
-                    break;
+                    if (lights[i].isActiveAndEnabled)
+                    {
+                        sunDirWorld = -lights[i].transform.forward;
+                        break;
+                    }
                 }
             }
 
             Vector3 sunPointWorld = (context.camera != null) ? (context.camera.transform.position + sunDirWorld * 10000.0f) : (Vector3.forward * 10000.0f);
             Vector3 vp = (context.camera != null) ? context.camera.WorldToViewportPoint(sunPointWorld) : Vector3.zero;
-            float sunVisible = (vp.z > 0f && vp.x >= -0.4f && vp.x <= 1.4f && vp.y >= -0.4f && vp.y <= 1.4f) ? 1.0f : 0.0f;
 
-            // Apparent sun disc radius in viewport height units
-            float sunDiscRadiusHeights = 0.06f;
-            if (context.camera != null && Planetarium.fetch != null && Planetarium.fetch.Sun != null)
-            {
-                try
-                {
-                    CelestialBody star = Planetarium.fetch.Sun;
-                    Vector3 toStar = (Sun.Instance != null)
-                        ? (Sun.Instance.transform.position - context.camera.transform.position)
-                        : (Vector3)(star.position - (Vector3d)context.camera.transform.position);
-                    double dist = toStar.magnitude;
-                    if (dist > 1000.0)
-                    {
-                        double angularRadius = star.Radius / dist;
-                        float p00 = Mathf.Max(0.0001f, context.camera.projectionMatrix.m00);
-                        float sunDiscRadiusPixels = (float)(angularRadius * p00 * (context.width * 0.5));
-                        sunDiscRadiusHeights = Mathf.Clamp(sunDiscRadiusPixels / Mathf.Max(1f, context.height), 0.02f, 0.25f);
-                    }
-                }
-                catch { }
-            }
+            // Allow sun to be up to 0.75 outside the viewport so rays fan into the screen
+            float sunVisible = (vp.z > 0f && vp.x >= -0.75f && vp.x <= 1.75f && vp.y >= -0.75f && vp.y <= 1.75f) ? 1.0f : 0.0f;
 
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetVector("_SunScreenPos", new Vector2(vp.x, vp.y));
             sheet.properties.SetFloat("_SunVisible", sunVisible);
-            sheet.properties.SetFloat("_SunDiscRadius", sunDiscRadiusHeights);
+            sheet.properties.SetFloat("_Threshold", settings.threshold.value);
             sheet.properties.SetFloat("_Density", settings.density.value);
             sheet.properties.SetFloat("_Decay", settings.decay.value);
             sheet.properties.SetFloat("_Weight", settings.weight.value);

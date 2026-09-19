@@ -8,13 +8,13 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class SubsurfaceScatteringEffect : PostProcessEffectSettings
     {
         [Range(0f, 1f), Tooltip("Subsurface scattering effect intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 0.5f };
+        public FloatParameter intensity = new FloatParameter { value = 0.75f };
 
-        [Range(0.1f, 10f), Tooltip("Diffusion scatter radius in millimeters/screen scale.")]
-        public FloatParameter scatterRadius = new FloatParameter { value = 2.5f };
+        [Range(0.5f, 15f), Tooltip("Diffusion scatter radius.")]
+        public FloatParameter scatterRadius = new FloatParameter { value = 5.0f };
 
-        [Range(0.01f, 0.5f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
-        public FloatParameter depthThreshold = new FloatParameter { value = 0.05f };
+        [Range(0.01f, 1f), Tooltip("Bilateral depth discontinuity threshold (meters) to prevent edge bleeding.")]
+        public FloatParameter depthThreshold = new FloatParameter { value = 0.2f };
 
         [Tooltip("Subsurface scatter tint color (e.g. warm peach for skin/EVA, or cool cyan for polar ice).")]
         public ColorParameter subsurfaceColor = new ColorParameter { value = new Color(1.0f, 0.85f, 0.75f, 1.0f) };
