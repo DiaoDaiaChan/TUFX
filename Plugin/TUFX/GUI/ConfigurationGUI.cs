@@ -13,11 +13,12 @@ namespace TUFX
     public class ConfigurationGUI : MonoBehaviour
     {
 
-        private static Rect windowRect = new Rect(Screen.width - 900, 40, 805, 600);
+        private static Rect windowRect = new Rect(Screen.width - 920, 40, 825, 620);
         private int windowID = 0;
         private Vector2 scrollPos = new Vector2();
         private Vector2 editScrollPos = new Vector2();
         private Vector2 texScrollPos = new Vector2();
+        private Vector2 profilerScrollPos = new Vector2();
 
         /// <summary>
         /// Cached list of all profile names currently loaded at the time the GUI was created.
@@ -49,6 +50,7 @@ namespace TUFX
             SelectProfile,
             EditProfile,
             ExtendFX,
+            PerformanceMonitor,
             SelectTexture,
             EditSpline,
         }
@@ -106,9 +108,14 @@ namespace TUFX
             {
                 this.selectionMode = GUIMode.ExtendFX;
             }
+            GUI.color = new Color(0.4f, 1.0f, 0.4f);
+            if (GUILayout.Toggle(currentMode == GUIMode.PerformanceMonitor, "Profiler".Localize(), GUI.skin.button, GUILayout.Width(80)))
+            {
+                this.selectionMode = GUIMode.PerformanceMonitor;
+            }
             GUI.color = prevColor;
 
-            if (currentMode > GUIMode.ExtendFX)
+            if (currentMode == GUIMode.SelectTexture || currentMode == GUIMode.EditSpline)
             {
                 if (GUILayout.Button("Return".Localize(), GUILayout.Width(65)))
                 {
@@ -120,7 +127,7 @@ namespace TUFX
             }
 
             // save current / reload current
-            if (currentMode <= GUIMode.ExtendFX && currentProfile != null)
+            if (currentMode != GUIMode.SelectTexture && currentMode != GUIMode.EditSpline && currentMode != GUIMode.PerformanceMonitor && currentProfile != null)
             {
                 if (GUILayout.Button("Save Selected".Localize(), GUILayout.Width(100)))
                 {
@@ -177,6 +184,10 @@ namespace TUFX
             {
                 renderExtendFXWindow();
             }
+            else if (selectionMode == GUIMode.PerformanceMonitor)
+            {
+                renderPerformanceMonitorWindow();
+            }
             else if (selectionMode == GUIMode.SelectTexture)
             {
                 renderTextureSelectWindow();
@@ -186,6 +197,121 @@ namespace TUFX
                 renderSplineConfigurationWindow();
             }
             GUI.DragWindow();
+        }
+
+        private void renderPerformanceMonitorWindow()
+        {
+            GUILayout.BeginHorizontal(HighLogic.Skin.box);
+            GUILayout.Label("#LOC_TUFX_Title_Profiler".Localize("<b><color=#55FF88>[Profiler]</color> Real-Time Pipeline Telemetry & Execution Probes</b>"));
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(TUFX.Performance.TUFXProfiler.Enabled ? "Pause Probes".Localize() : "Resume Probes".Localize(), GUILayout.Width(110)))
+            {
+                TUFX.Performance.TUFXProfiler.Enabled = !TUFX.Performance.TUFXProfiler.Enabled;
+            }
+            if (GUILayout.Button("Reset Peaks".Localize(), GUILayout.Width(100)))
+            {
+                TUFX.Performance.TUFXProfiler.ResetPeaks();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("#LOC_TUFX_Profiler_Desc".Localize("<size=10><color=grey>Real-time per-effect CPU execution latency and relative GPU dispatch overhead tracked in strict hardware execution order.</color></size>"));
+
+            // Dashboard Metrics Card
+            GUILayout.BeginVertical(HighLogic.Skin.box);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(string.Format("<b>{0}:</b> <color=lime>{1:F1}</color>", "FPS".Localize(), TUFX.Performance.TUFXProfiler.Fps), GUILayout.Width(110));
+            GUILayout.Label(string.Format("<b>{0}:</b> {1:F2} ms", "Frame Latency".Localize(), TUFX.Performance.TUFXProfiler.FrameTimeMs), GUILayout.Width(160));
+            GUILayout.Label(string.Format("<b>{0}:</b> <color=#00e5ff>{1:F3} ms</color>", "TUFX Post-Process".Localize(), TUFX.Performance.TUFXProfiler.AvgTotalPostProcessTimeMs), GUILayout.Width(220));
+            GUILayout.Label(string.Format("<b>{0}:</b> <color=yellow>{1}</color> / {2}", "Active Passes".Localize(), TUFX.Performance.TUFXProfiler.ActiveEffectsCount, TUFX.Performance.TUFXProfiler.GetSortedEntries().Count));
+            GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+
+            // Pipeline Stages Legend
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("<size=10><b>Pipeline: </b> <color=#ffaa00>[1. Opaque]</color>  →  <color=#00e5ff>[2. BeforeStack]</color>  →  <color=#b388ff>[3. Builtins]</color>  →  <color=#69f0ae>[4. AfterStack]</color>  →  <color=#ff4081>[5. FinalPass]</color></size>");
+            GUILayout.EndHorizontal();
+
+            // Telemetry Table Header
+            GUILayout.BeginHorizontal(HighLogic.Skin.box);
+            GUILayout.Label("<b>#</b>", GUILayout.Width(35));
+            GUILayout.Label("<b>" + "Stage".Localize() + "</b>", GUILayout.Width(95));
+            GUILayout.Label("<b>" + "Effect / Pass Name".Localize() + "</b>", GUILayout.Width(270));
+            GUILayout.Label("<b>" + "Status".Localize() + "</b>", GUILayout.Width(70));
+            GUILayout.Label("<b>" + "Avg Time".Localize() + "</b>", GUILayout.Width(75));
+            GUILayout.Label("<b>" + "Share %".Localize() + "</b>", GUILayout.Width(110));
+            GUILayout.Label("<b>" + "Peak".Localize() + "</b>", GUILayout.Width(65));
+            GUILayout.EndHorizontal();
+
+            // Scrollable Telemetry List
+            profilerScrollPos = GUILayout.BeginScrollView(profilerScrollPos);
+            GUILayout.BeginVertical();
+
+            var entries = TUFX.Performance.TUFXProfiler.GetSortedEntries();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+
+                GUILayout.BeginHorizontal(HighLogic.Skin.textArea);
+
+                // 1. Order
+                GUILayout.Label(string.Format("<color=grey>#{0:D2}</color>", entry.executionOrder), GUILayout.Width(35));
+
+                // 2. Stage badge
+                string stageBadge;
+                switch (entry.stage)
+                {
+                    case TUFX.Performance.PipelineStage.Opaque:
+                        stageBadge = "<color=#ffaa00>[Opaque]</color>";
+                        break;
+                    case TUFX.Performance.PipelineStage.BeforeStack:
+                        stageBadge = "<color=#00e5ff>[BeforeStack]</color>";
+                        break;
+                    case TUFX.Performance.PipelineStage.BuiltinStack:
+                        stageBadge = "<color=#b388ff>[Builtins]</color>";
+                        break;
+                    case TUFX.Performance.PipelineStage.AfterStack:
+                        stageBadge = "<color=#69f0ae>[AfterStack]</color>";
+                        break;
+                    case TUFX.Performance.PipelineStage.FinalPass:
+                        stageBadge = "<color=#ff4081>[FinalPass]</color>";
+                        break;
+                    default:
+                        stageBadge = "[Custom]";
+                        break;
+                }
+                GUILayout.Label(stageBadge, GUILayout.Width(95));
+
+                // 3. Name (Localized)
+                string locName = !string.IsNullOrEmpty(entry.tag) ? entry.tag.Localize(entry.displayName) : entry.displayName;
+                GUILayout.Label(locName, GUILayout.Width(270));
+
+                // 4. Status
+                if (entry.isRunning)
+                {
+                    GUILayout.Label("<color=lime>● RUN</color>", GUILayout.Width(70));
+                }
+                else
+                {
+                    GUILayout.Label("<color=grey>○ OFF</color>", GUILayout.Width(70));
+                }
+
+                // 5. Avg Time (ms)
+                string timeColor = entry.avgTimeMs >= 1.0f ? "red" : (entry.avgTimeMs >= 0.3f ? "yellow" : "white");
+                GUILayout.Label(string.Format("<color={0}>{1:F3} ms</color>", timeColor, entry.avgTimeMs), GUILayout.Width(75));
+
+                // 6. Share % and visual bar
+                int barBlocks = Mathf.Clamp(Mathf.RoundToInt(entry.relativePercent / 10f), 0, 10);
+                string bar = new string('█', barBlocks) + new string('░', 10 - barBlocks);
+                GUILayout.Label(string.Format("<color=#00e5ff>{0}</color> {1,4:F1}%", bar, entry.relativePercent), GUILayout.Width(110));
+
+                // 7. Peak (ms)
+                GUILayout.Label(string.Format("<color=grey>{0:F3} ms</color>", entry.peakTimeMs), GUILayout.Width(65));
+
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
         }
 
         private void renderSelectionWindow()

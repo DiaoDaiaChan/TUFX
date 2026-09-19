@@ -211,6 +211,7 @@ namespace UnityEngine.Rendering.PostProcessing
         // Recycled list - used to reduce GC stress when gathering active effects in a bundle list
         // on each frame
         readonly List<PostProcessEffectRenderer> m_ActiveEffects = new List<PostProcessEffectRenderer>();
+        readonly List<PostProcessBundle> m_ActiveBundles = new List<PostProcessBundle>();
         readonly List<RenderTargetIdentifier> m_Targets = new List<RenderTargetIdentifier>();
 
         void OnEnable()
@@ -556,6 +557,7 @@ namespace UnityEngine.Rendering.PostProcessing
             m_LegacyCmdBuffer.Clear();
 
             SetupContext(context);
+            TUFX.Performance.TUFXProfiler.BeginFrame();
 
             context.command = m_LegacyCmdBufferOpaque;
             TextureLerper.instance.BeginFrame(context);
@@ -587,16 +589,22 @@ namespace UnityEngine.Rendering.PostProcessing
 
                 // Render as soon as possible - should be done async in SRPs when available
                 context.command = m_LegacyCmdBufferBeforeReflections;
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 ao.RenderAmbientOnly(context);
 
                 // Composite with GBuffer right before the lighting pass
                 context.command = m_LegacyCmdBufferBeforeLighting;
                 ao.CompositeAmbientOnly(context);
+                long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample("AmbientOcclusion", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
             }
             else if (isAmbientOcclusionOpaque)
             {
                 context.command = m_LegacyCmdBufferOpaque;
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 aoRenderer.Get().RenderAfterOpaque(context);
+                long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample("AmbientOcclusion", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
             }
 
             bool isFogActive = fog.IsEnabledAndSupported(context);
@@ -628,14 +636,20 @@ namespace UnityEngine.Rendering.PostProcessing
 
                 if (isScreenSpaceReflectionsActive)
                 {
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                     ssrRenderer.Render(context);
+                    long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    TUFX.Performance.TUFXProfiler.RecordSample("ScreenSpaceReflections", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                     opaqueOnlyEffects--;
                     UpdateSrcDstForOpaqueOnly(ref srcTarget, ref dstTarget, context, cameraTarget, opaqueOnlyEffects);
                 }
 
                 if (isFogActive)
                 {
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                     fog.Render(context);
+                    long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    TUFX.Performance.TUFXProfiler.RecordSample("Fog", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                     opaqueOnlyEffects--;
                     UpdateSrcDstForOpaqueOnly(ref srcTarget, ref dstTarget, context, cameraTarget, opaqueOnlyEffects);
                 }
@@ -691,6 +705,7 @@ namespace UnityEngine.Rendering.PostProcessing
             context.command = m_LegacyCmdBuffer;
 
             Render(context);
+            TUFX.Performance.TUFXProfiler.EndFrame();
 
             if (tempRt > -1)
                 m_LegacyCmdBuffer.ReleaseTemporaryRT(tempRt);
@@ -1049,7 +1064,10 @@ namespace UnityEngine.Rendering.PostProcessing
                     var finalDestination = context.destination;
                     context.GetScreenSpaceTemporaryRT(cmd, taaTarget, 0, context.sourceFormat);
                     context.destination = taaTarget;
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                     temporalAntialiasing.Render(context);
+                    long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    TUFX.Performance.TUFXProfiler.RecordSample("TemporalAntialiasing", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                     context.source = taaTarget;
                     context.destination = finalDestination;
 
@@ -1128,13 +1146,17 @@ namespace UnityEngine.Rendering.PostProcessing
 
             // First gather active effects - we need this to manage render targets more efficiently
             m_ActiveEffects.Clear();
+            m_ActiveBundles.Clear();
             for (int i = 0; i < list.Count; i++)
             {
                 var effect = list[i].bundle;
                 if (effect.settings.IsEnabledAndSupported(context))
                 {
                     if (!context.isSceneView || (context.isSceneView && effect.attribute.allowInSceneView))
+                    {
                         m_ActiveEffects.Add(effect.renderer);
+                        m_ActiveBundles.Add(effect);
+                    }
                 }
             }
 
@@ -1143,9 +1165,12 @@ namespace UnityEngine.Rendering.PostProcessing
             // If there's only one active effect, we can simply execute it and skip the rest
             if (count == 1)
             {
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 m_ActiveEffects[0].Render(context);
+                long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample(m_ActiveBundles[0].settings.GetType().Name, (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
             }
-            else
+            else if (count > 1)
             {
                 // Else create the target chain
                 m_Targets.Clear();
@@ -1168,7 +1193,10 @@ namespace UnityEngine.Rendering.PostProcessing
                 {
                     context.source = m_Targets[i];
                     context.destination = m_Targets[i + 1];
+                    long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                     m_ActiveEffects[i].Render(context);
+                    long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                    TUFX.Performance.TUFXProfiler.RecordSample(m_ActiveBundles[i].settings.GetType().Name, (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                 }
 
                 cmd.ReleaseTemporaryRT(tempTarget1);
@@ -1251,7 +1279,10 @@ namespace UnityEngine.Rendering.PostProcessing
             if (isFinalPass)
             {
                 uberSheet.EnableKeyword("FINALPASS");
+                long t0_d = System.Diagnostics.Stopwatch.GetTimestamp();
                 dithering.Render(context);
+                long t1_d = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample("Dithering", (float)((t1_d - t0_d) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                 ApplyFlip(context, uberSheet.properties);
             }
             else
@@ -1344,12 +1375,18 @@ namespace UnityEngine.Rendering.PostProcessing
                     var finalDestination = context.destination;
                     context.GetScreenSpaceTemporaryRT(context.command, tempTarget, 0, context.sourceFormat);
                     context.destination = tempTarget;
+                    long t0_smaa = System.Diagnostics.Stopwatch.GetTimestamp();
                     subpixelMorphologicalAntialiasing.Render(context);
+                    long t1_smaa = System.Diagnostics.Stopwatch.GetTimestamp();
+                    TUFX.Performance.TUFXProfiler.RecordSample("SubpixelMorphologicalAntialiasing", (float)((t1_smaa - t0_smaa) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                     context.source = tempTarget;
                     context.destination = finalDestination;
                 }
 
+                long t0_d2 = System.Diagnostics.Stopwatch.GetTimestamp();
                 dithering.Render(context);
+                long t1_d2 = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample("Dithering", (float)((t1_d2 - t0_d2) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
 
                 ApplyFlip(context, uberSheet.properties);
                 if (context.stereoActive && context.stereoRenderingMode == PostProcessRenderContext.StereoRenderingMode.SinglePassInstanced)
@@ -1391,7 +1428,10 @@ namespace UnityEngine.Rendering.PostProcessing
 
             if (!useTempTarget)
             {
+                long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 effect.renderer.Render(context);
+                long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
+                TUFX.Performance.TUFXProfiler.RecordSample(typeof(T).Name, (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
                 return -1;
             }
 
@@ -1399,7 +1439,10 @@ namespace UnityEngine.Rendering.PostProcessing
             var tempTarget = m_TargetPool.Get();
             context.GetScreenSpaceTemporaryRT(context.command, tempTarget, 0, context.sourceFormat);
             context.destination = tempTarget;
+            long t0_b = System.Diagnostics.Stopwatch.GetTimestamp();
             effect.renderer.Render(context);
+            long t1_b = System.Diagnostics.Stopwatch.GetTimestamp();
+            TUFX.Performance.TUFXProfiler.RecordSample(typeof(T).Name, (float)((t1_b - t0_b) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));
             context.source = tempTarget;
             context.destination = finalDestination;
             return tempTarget;
