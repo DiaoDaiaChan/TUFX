@@ -854,7 +854,12 @@ namespace TUFX
                 AddFloatParameter("Threshold", af.threshold, 0.5f, 15f);
                 AddFloatParameter("Soft Knee", af.softKnee, 0f, 1f);
                 AddFloatParameter("Max Brightness", af.maxBrightness, 5f, 50f);
-                GUILayout.Label("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, and diffraction starbursts.</color></size>");
+                AddBoolParameter("Cinematic Letterbox", af.letterbox);
+                if (af.letterbox.value)
+                {
+                    AddFloatParameter("Letterbox Ratio", af.letterboxRatio, 1.85f, 3.0f);
+                }
+                GUILayout.Label("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, diffraction starbursts, and cinematic letterbox black bars.</color></size>");
             }
             GUILayout.EndVertical();
         }

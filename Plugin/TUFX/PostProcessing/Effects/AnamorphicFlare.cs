@@ -45,9 +45,15 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(5f, 50f), Tooltip("Maximum brightness clamp to prevent specular blowout on metallic surfaces.")]
         public FloatParameter maxBrightness = new FloatParameter { value = 25.0f };
 
+        [Tooltip("Enable cinematic widescreen letterbox black bars on top and bottom.")]
+        public BoolParameter letterbox = new BoolParameter { value = false };
+
+        [Range(1.85f, 3.0f), Tooltip("Target cinematic aspect ratio (e.g. 2.39 for CinemaScope, 2.35 for standard anamorphic, 2.33 for 21:9).")]
+        public FloatParameter letterboxRatio = new FloatParameter { value = 2.39f };
+
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
-            return enabled.value && (streakIntensity.value > 0f || spikeIntensity.value > 0f || ghostIntensity.value > 0f);
+            return enabled.value && (streakIntensity.value > 0f || spikeIntensity.value > 0f || ghostIntensity.value > 0f || letterbox.value);
         }
 
         public override void Load(ConfigNode config)
@@ -65,6 +71,8 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "Threshold", threshold);
             loadFloatParameter(config, "SoftKnee", softKnee);
             loadFloatParameter(config, "MaxBrightness", maxBrightness);
+            loadBoolParameter(config, "Letterbox", letterbox);
+            loadFloatParameter(config, "LetterboxRatio", letterboxRatio);
         }
 
         public override void Save(ConfigNode config)
@@ -82,13 +90,15 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "Threshold", threshold);
             saveFloatParameter(config, "SoftKnee", softKnee);
             saveFloatParameter(config, "MaxBrightness", maxBrightness);
+            saveBoolParameter(config, "Letterbox", letterbox);
+            saveFloatParameter(config, "LetterboxRatio", letterboxRatio);
         }
     }
 
     [UnityEngine.Scripting.Preserve]
     internal sealed class AnamorphicFlareRenderer : PostProcessEffectRenderer<AnamorphicFlare>
     {
-        private const int k_MaxPyramidLevels = 5;
+        private const int k_MaxPyramidLevels = 7;
         private static readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
         private static readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
 
@@ -141,6 +151,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_SpikeIntensity", settings.spikeIntensity.value);
             sheet.properties.SetInt("_SpikeCount", settings.spikeCount.value);
             sheet.properties.SetFloat("_SpikeLength", settings.spikeLength.value);
+            sheet.properties.SetFloat("_LetterboxRatio", settings.letterbox.value ? settings.letterboxRatio.value : 0.0f);
 
             int width = context.width / 2;
             int height = context.height / 2;
@@ -178,7 +189,7 @@ namespace UnityEngine.Rendering.PostProcessing
                 }
 
                 // Pass 3: Horizontal Upsample & Additive Accumulation
-                float streakSpread = Mathf.Clamp(0.55f + settings.streakLength.value * 0.04f, 0.5f, 0.95f);
+                float streakSpread = Mathf.Clamp(0.60f + settings.streakLength.value * 0.05f, 0.5f, 0.98f);
                 sheet.properties.SetFloat("_StreakSpread", streakSpread);
 
                 int lastUp = m_MipsDown[k_MaxPyramidLevels - 1];

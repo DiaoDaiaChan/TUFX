@@ -23,6 +23,7 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         float _SpikeIntensity;
         int _SpikeCount;
         float _SpikeLength;
+        float _LetterboxRatio;
 
         // Jimenez's Interleaved Gradient Noise for continuous ray jittering
         float InterleavedGradientNoise(float2 pixCoord)
@@ -178,12 +179,30 @@ Shader "Hidden/TUFX/AnamorphicFlare"
         // Pass 6: Final Composite
         float4 FragComposite(VaryingsDefault i) : SV_Target
         {
+            // Cinematic Letterbox black bars (e.g. 2.39:1 CinemaScope / Anamorphic widescreen)
+            if (_LetterboxRatio > 1.0)
+            {
+                float screenAspect = _MainTex_TexelSize.z / _MainTex_TexelSize.w;
+                float targetHeight = screenAspect / _LetterboxRatio;
+                float barSize = (1.0 - targetHeight) * 0.5;
+                if (i.texcoord.y < barSize || i.texcoord.y > (1.0 - barSize))
+                {
+                    return float4(0.0, 0.0, 0.0, 1.0);
+                }
+            }
+
             float4 orig = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float3 streak = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_MainTex, i.texcoord).rgb * (_StreakIntensity * _StreakColor.rgb * 2.0);
+            float3 streak = SAMPLE_TEXTURE2D(_FlareStreakTex, sampler_MainTex, i.texcoord).rgb;
+
+            // White-hot core transitioning into vivid cinematic electric cyan-blue tails
+            float streakLuma = dot(streak, float3(0.2126, 0.7152, 0.0722));
+            float3 streakTint = lerp(_StreakColor.rgb, float3(1.0, 1.0, 1.0), saturate(streakLuma * 0.45));
+            float3 coloredStreak = streak * streakTint * (_StreakIntensity * 2.5);
+
             float3 spikes = SAMPLE_TEXTURE2D(_FlareSpikesTex, sampler_MainTex, i.texcoord).rgb;
             float3 ghosts = SAMPLE_TEXTURE2D(_FlareGhostTex, sampler_MainTex, i.texcoord).rgb;
 
-            float3 finalFlare = streak + spikes + ghosts;
+            float3 finalFlare = coloredStreak + spikes + ghosts;
             return float4(orig.rgb + finalFlare, orig.a);
         }
     ENDHLSL
