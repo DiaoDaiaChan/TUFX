@@ -293,13 +293,16 @@ namespace TUFX
             // 7. Anamorphic Lens Flare & Starburst
             renderAnamorphicFlareSettings();
 
-            // 8. Spectral Bokeh (Chromatic Depth of Field)
+            // 8. Screen Space Light Shafts / Volumetric Shadows (God Rays)
+            renderGodRaysSettings();
+
+            // 9. Spectral Bokeh (Chromatic Depth of Field)
             renderSpectralBokehSettings();
 
-            // 9. Hypersonic Reentry Heat Haze
+            // 10. Hypersonic Reentry Heat Haze
             renderHeatDistortionSettings();
 
-            // 10. Dynamic Flight Context Adaptation Toggle
+            // 11. Dynamic Flight Context Adaptation Toggle
             renderDynamicContextSettings();
 
             GUILayout.EndScrollView();
@@ -710,7 +713,7 @@ namespace TUFX
 
         private void renderGodRaysSettings()
         {
-            bool showProps = AddEffectHeader("God Rays (Crepuscular Rays)", out GodRays gr);
+            bool showProps = AddEffectHeader("Screen Space Light Shafts & Volumetric Shadows (God Rays)", out GodRays gr);
             if (showProps)
             {
                 AddFloatParameter("Intensity", gr.intensity, 0f, 5f);
@@ -718,6 +721,7 @@ namespace TUFX
                 AddFloatParameter("Decay", gr.decay, 0.8f, 0.99f);
                 AddFloatParameter("Weight", gr.weight, 0.05f, 1f);
                 AddColorParameter("Ray Color", gr.rayColor);
+                GUILayout.Label("<size=10><color=grey>Simulates dramatic Tyndall volumetric light shafts and spacecraft shadow rays in backlight angles.</color></size>");
             }
             GUILayout.EndVertical();
         }

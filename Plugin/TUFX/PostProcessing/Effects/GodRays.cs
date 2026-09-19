@@ -59,14 +59,8 @@ namespace UnityEngine.Rendering.PostProcessing
             if (shader == null) shader = Shader.Find("Hidden/TUFX/GodRays");
             if (shader == null) return;
 
-            // In vacuum (space orbit), light shafts cannot physically exist as there are no aerosols or atmosphere.
-            // Also bypass on MainMenu or ScaledCamera.
+            // Bypass on MainMenu or ScaledCamera
             if (HighLogic.LoadedScene == GameScenes.MAINMENU || (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam))
-            {
-                context.command.BlitFullscreenTriangle(context.source, context.destination);
-                return;
-            }
-            if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.ActiveVessel != null && FlightGlobals.ActiveVessel.atmDensity < 0.001)
             {
                 context.command.BlitFullscreenTriangle(context.source, context.destination);
                 return;
