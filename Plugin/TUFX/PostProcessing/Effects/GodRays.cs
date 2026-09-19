@@ -59,13 +59,33 @@ namespace UnityEngine.Rendering.PostProcessing
             if (shader == null) shader = Shader.Find("Hidden/TUFX/GodRays");
             if (shader == null) return;
 
-            Vector3 sunWorldPos = Vector3.forward * 1000000f;
-            if (Sun.Instance != null)
+            // In vacuum (space orbit), light shafts cannot physically exist as there are no aerosols or atmosphere.
+            // Also bypass on MainMenu or ScaledCamera.
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU || (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam))
             {
-                sunWorldPos = Sun.Instance.transform.position;
+                context.command.BlitFullscreenTriangle(context.source, context.destination);
+                return;
+            }
+            if (HighLogic.LoadedScene == GameScenes.FLIGHT && FlightGlobals.ActiveVessel != null && FlightGlobals.ActiveVessel.atmDensity < 0.001)
+            {
+                context.command.BlitFullscreenTriangle(context.source, context.destination);
+                return;
             }
 
-            Vector3 vp = context.camera.WorldToViewportPoint(sunWorldPos);
+            // Accurate Sun world direction from primary directional light
+            Vector3 sunDirWorld = Vector3.forward;
+            Light[] lights = Light.GetLights(LightType.Directional, 0);
+            for (int i = 0; i < lights.Length; i++)
+            {
+                if (lights[i].isActiveAndEnabled)
+                {
+                    sunDirWorld = -lights[i].transform.forward;
+                    break;
+                }
+            }
+
+            Vector3 sunPointWorld = (context.camera != null) ? (context.camera.transform.position + sunDirWorld * 10000.0f) : (Vector3.forward * 10000.0f);
+            Vector3 vp = (context.camera != null) ? context.camera.WorldToViewportPoint(sunPointWorld) : Vector3.zero;
             float sunVisible = (vp.z > 0f && vp.x >= -0.2f && vp.x <= 1.2f && vp.y >= -0.2f && vp.y <= 1.2f) ? 1.0f : 0.0f;
 
             var sheet = context.propertySheets.Get(shader);

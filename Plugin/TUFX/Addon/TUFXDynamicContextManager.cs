@@ -75,10 +75,11 @@ namespace TUFX
             var exposure = profile.GetSettingsFor<AutoExposure>();
             if (exposure != null && exposure.enabled.value)
             {
-                // In eclipse/night, slightly raise min luminance compensation for subtle ambient eye adaptation
+                // In eclipse/night, maintain a safe minimum luminance threshold (never negative in space)
+                // to prevent boosting the black space void into a washed-out grey fog.
                 if (exposure.minLuminance.overrideState)
                 {
-                    exposure.minLuminance.value = Mathf.Lerp(exposure.minLuminance.value, -8.0f, currentNightAdaptation * 0.05f);
+                    exposure.minLuminance.value = Mathf.Max(2.5f, exposure.minLuminance.value);
                 }
             }
         }

@@ -18,6 +18,20 @@ Shader "Hidden/TUFX/GodRays"
         // Pass 0: Extract unoccluded sun/sky light mask
         float4 FragExtract(VaryingsDefault i) : SV_Target
         {
+            if (_SunVisible <= 0.0)
+            {
+                return float4(0, 0, 0, 0);
+            }
+
+            // Constrain light extraction to the actual sun disc neighborhood,
+            // never extracting entire background planets or skybox.
+            float2 sunVec = (i.texcoord - _SunScreenPos);
+            float sunDist = length(sunVec * float2(_MainTex_TexelSize.z / _MainTex_TexelSize.w, 1.0));
+            if (sunDist > 0.15)
+            {
+                return float4(0, 0, 0, 0);
+            }
+
             float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
             // Only non-geometry (depth == 0 or 1 depending on reversed-Z) transmits sunlight
             #if UNITY_REVERSED_Z
@@ -28,7 +42,8 @@ Shader "Hidden/TUFX/GodRays"
 
             float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float luma = dot(col.rgb, float3(0.2126, 0.7152, 0.0722));
-            return float4(col.rgb * isSky * saturate(luma), 1.0);
+            float sunFalloff = saturate(1.0 - (sunDist / 0.15));
+            return float4(col.rgb * isSky * max(0.0, luma - 0.5) * sunFalloff, 1.0);
         }
 
         // Pass 1: Radial blur raymarching
@@ -39,22 +54,26 @@ Shader "Hidden/TUFX/GodRays"
                 return float4(0, 0, 0, 0);
             }
 
+            // Interleaved gradient noise to jitter radial samples and prevent discrete shadow banding
+            float dither = frac(52.9829189 * frac(dot(i.texcoord * _MainTex_TexelSize.zw, float2(0.06711056, 0.00583715))));
             float2 deltaUV = (i.texcoord - _SunScreenPos) * (1.0 / 32.0) * _Density;
-            float2 uv = i.texcoord;
+            float2 uv = i.texcoord - deltaUV * dither;
             float illuminationDecay = 1.0;
             float4 color = float4(0, 0, 0, 0);
+            float totalWeight = 0.0001;
 
             [unroll(32)]
             for (int s = 0; s < 32; s++)
             {
-                uv -= deltaUV;
                 float4 sampleColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv);
-                sampleColor *= illuminationDecay * _Weight;
-                color += sampleColor;
+                float w = illuminationDecay * _Weight;
+                color += sampleColor * w;
+                totalWeight += w;
                 illuminationDecay *= _Decay;
+                uv -= deltaUV;
             }
 
-            return color * _Intensity * _RayColor;
+            return (color / totalWeight) * _Intensity * _RayColor;
         }
 
         // Pass 2: Composite God Rays onto Scene Color

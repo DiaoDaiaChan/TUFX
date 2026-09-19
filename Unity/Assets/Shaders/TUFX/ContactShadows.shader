@@ -58,13 +58,17 @@ Shader "Hidden/TUFX/ContactShadows"
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            float2 rayStepUV = (endUV - i.texcoord) / (float)_RaySteps;
+            // Interleaved gradient noise jitter to eliminate discrete stair-step shadow banding
+            float dither = frac(52.9829189 * frac(dot(i.texcoord * _MainTex_TexelSize.zw, float2(0.06711056, 0.00583715))));
+            float2 rayDeltaUV = (endUV - i.texcoord);
 
+            float bias = max(0.005, linearDepth * 0.001);
             float shadow = 1.0;
             [unroll(16)]
             for (int s = 1; s <= _RaySteps; s++)
             {
-                float2 sampleUV = i.texcoord + rayStepUV * (float)s;
+                float t = ((float)s - 0.5 + (dither - 0.5) * 0.95) / (float)_RaySteps;
+                float2 sampleUV = i.texcoord + rayDeltaUV * t;
                 if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0)
                     break;
 
@@ -77,10 +81,10 @@ Shader "Hidden/TUFX/ContactShadows"
 
                 float sampleLinearDepth = LinearEyeDepth(sampleRawDepth);
 
-                float expectedDepth = originPos.z + rayDir.z * (_RayLength * (float)s / (float)_RaySteps);
+                float expectedDepth = originPos.z + rayDir.z * (_RayLength * t);
                 float depthDiff = expectedDepth - sampleLinearDepth;
 
-                if (depthDiff > 0.002 && depthDiff < _Thickness)
+                if (depthDiff > bias && depthDiff < _Thickness)
                 {
                     shadow = 1.0 - _Intensity;
                     break;
