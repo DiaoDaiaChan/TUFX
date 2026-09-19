@@ -8,16 +8,16 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class Halation : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Halation intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 1.2f };
+        public FloatParameter intensity = new FloatParameter { value = 1.0f };
 
         [Range(0.1f, 5f), Tooltip("Luminance threshold above which halation triggers.")]
-        public FloatParameter threshold = new FloatParameter { value = 0.75f };
+        public FloatParameter threshold = new FloatParameter { value = 1.2f };
 
-        [Range(0.5f, 10f), Tooltip("Halation glow radius / blur spread.")]
-        public FloatParameter radius = new FloatParameter { value = 3.5f };
+        [Range(0.5f, 5f), Tooltip("Halation glow radius / blur spread.")]
+        public FloatParameter radius = new FloatParameter { value = 2.0f };
 
         [Tooltip("Color tint of the halation diffusion (warm red/orange CineStill 800T style).")]
-        public ColorParameter colorTint = new ColorParameter { value = new Color(1.0f, 0.28f, 0.10f, 1.0f) };
+        public ColorParameter colorTint = new ColorParameter { value = new Color(1.0f, 0.36f, 0.12f, 1.0f) };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
@@ -44,6 +44,28 @@ namespace UnityEngine.Rendering.PostProcessing
     [UnityEngine.Scripting.Preserve]
     internal sealed class HalationRenderer : PostProcessEffectRenderer<Halation>
     {
+        private const int k_MaxPyramidLevels = 4;
+        private readonly int[] m_MipsDown = new int[k_MaxPyramidLevels];
+        private readonly int[] m_MipsUp = new int[k_MaxPyramidLevels];
+
+        public HalationRenderer()
+        {
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                m_MipsDown[k] = Shader.PropertyToID("_HalationMipDown_" + k);
+                m_MipsUp[k] = Shader.PropertyToID("_HalationMipUp_" + k);
+            }
+        }
+
+        public override void Init()
+        {
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                m_MipsDown[k] = Shader.PropertyToID("_HalationMipDown_" + k);
+                m_MipsUp[k] = Shader.PropertyToID("_HalationMipUp_" + k);
+            }
+        }
+
         public override void Render(PostProcessRenderContext context)
         {
             var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null) ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/Halation") : null;
@@ -55,44 +77,58 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Threshold", settings.threshold.value);
             sheet.properties.SetColor("_ColorTint", settings.colorTint.value);
 
+            float r = Mathf.Clamp(settings.radius.value, 0.5f, 5.0f);
+            sheet.properties.SetFloat("_SampleScale", r * 0.75f);
+
             int width = Mathf.Max(1, context.width / 2);
             int height = Mathf.Max(1, context.height / 2);
 
             int rtExtract = Shader.PropertyToID("_HalationExtract");
-            int rtTemp = Shader.PropertyToID("_HalationTemp");
-            int rtTight = Shader.PropertyToID("_HalationTightTex");
-            int rtWide = Shader.PropertyToID("_HalationWideTex");
-
             var cmd = context.command;
             cmd.GetTemporaryRT(rtExtract, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtTemp, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtTight, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtWide, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
 
-            // Pass 0: Soft-Knee Extract
+            // Pass 0: Soft-Knee Threshold Extract
             cmd.BlitFullscreenTriangle(context.source, rtExtract, sheet, 0);
 
-            float r = Mathf.Max(0.5f, settings.radius.value);
+            // Allocate Mip Pyramid
+            int tw = width;
+            int th = height;
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                cmd.GetTemporaryRT(m_MipsDown[k], tw, th, 0, FilterMode.Bilinear, context.sourceFormat);
+                cmd.GetTemporaryRT(m_MipsUp[k], tw, th, 0, FilterMode.Bilinear, context.sourceFormat);
+                tw = Mathf.Max(1, tw / 2);
+                th = Mathf.Max(1, th / 2);
+            }
 
-            // Tight Diffusion (Pass 1 H + Pass 2 V)
-            sheet.properties.SetFloat("_Radius", r * 1.5f);
-            cmd.BlitFullscreenTriangle(rtExtract, rtTemp, sheet, 1);
-            cmd.BlitFullscreenTriangle(rtTemp, rtTight, sheet, 2);
+            // Downsample Pyramid (13-Tap Anti-Aliased Box Filter)
+            cmd.BlitFullscreenTriangle(rtExtract, m_MipsDown[0], sheet, 1);
+            for (int k = 1; k < k_MaxPyramidLevels; k++)
+            {
+                cmd.BlitFullscreenTriangle(m_MipsDown[k - 1], m_MipsDown[k], sheet, 1);
+            }
 
-            // Wide Diffusion (Pass 1 H + Pass 2 V)
-            sheet.properties.SetFloat("_Radius", r * 6.0f);
-            cmd.BlitFullscreenTriangle(rtExtract, rtTemp, sheet, 1);
-            cmd.BlitFullscreenTriangle(rtTemp, rtWide, sheet, 2);
+            // Upsample Pyramid (9-Tap Tent Filter with Additive Accumulation)
+            int lastUp = m_MipsDown[k_MaxPyramidLevels - 1];
+            for (int k = k_MaxPyramidLevels - 2; k >= 0; k--)
+            {
+                cmd.SetGlobalTexture("_HalationBaseTex", m_MipsDown[k]);
+                cmd.BlitFullscreenTriangle(lastUp, m_MipsUp[k], sheet, 2);
+                lastUp = m_MipsUp[k];
+            }
 
-            // Pass 3: Composite
-            cmd.SetGlobalTexture("_HalationTightTex", rtTight);
-            cmd.SetGlobalTexture("_HalationWideTex", rtWide);
+            // Pass 3: Composite (Tight Glow = m_MipsUp[0], Wide Halo = m_MipsUp[1])
+            cmd.SetGlobalTexture("_HalationTightTex", m_MipsUp[0]);
+            cmd.SetGlobalTexture("_HalationWideTex", m_MipsUp[1]);
             cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 3);
 
+            // Cleanup
             cmd.ReleaseTemporaryRT(rtExtract);
-            cmd.ReleaseTemporaryRT(rtTemp);
-            cmd.ReleaseTemporaryRT(rtTight);
-            cmd.ReleaseTemporaryRT(rtWide);
+            for (int k = 0; k < k_MaxPyramidLevels; k++)
+            {
+                cmd.ReleaseTemporaryRT(m_MipsDown[k]);
+                cmd.ReleaseTemporaryRT(m_MipsUp[k]);
+            }
         }
     }
 }
