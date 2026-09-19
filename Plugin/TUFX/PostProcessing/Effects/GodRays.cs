@@ -79,11 +79,68 @@ namespace UnityEngine.Rendering.PostProcessing
 
             // Accurate Sun world direction: prefer true astronomical Sun body
             Vector3 sunDirWorld = Vector3.forward;
+            float celestialVisibility = 1.0f;
+
             if (Planetarium.fetch != null && Planetarium.fetch.Sun != null && context.camera != null)
             {
                 Vector3d camPosD = (Vector3d)context.camera.transform.position;
                 Vector3d sunPosD = Planetarium.fetch.Sun.position;
-                sunDirWorld = (Vector3)(sunPosD - camPosD).normalized;
+                Vector3d camToSun = sunPosD - camPosD;
+                double sunDistD = camToSun.magnitude;
+                Vector3d sunDirD = camToSun / sunDistD;
+                sunDirWorld = (Vector3)sunDirD;
+
+                // Astronomical ray-sphere occultation check across all celestial bodies (Earth, Kerbin, Mun, etc.)
+                if (FlightGlobals.Bodies != null)
+                {
+                    int bodyCount = FlightGlobals.Bodies.Count;
+                    for (int i = 0; i < bodyCount; i++)
+                    {
+                        CelestialBody body = FlightGlobals.Bodies[i];
+                        if (body == null || body == Planetarium.fetch.Sun) continue;
+
+                        Vector3d camToBody = body.position - camPosD;
+                        double proj = Vector3d.Dot(camToBody, sunDirD);
+
+                        // Body must be between camera and Sun
+                        if (proj > 0.0 && proj < sunDistD)
+                        {
+                            double perpDistSq = camToBody.sqrMagnitude - proj * proj;
+                            if (perpDistSq < 0.0) perpDistSq = 0.0;
+                            double perpDist = Math.Sqrt(perpDistSq);
+                            double bodyRadius = body.Radius;
+
+                            // Calculate apparent solar disc radius at the body's distance
+                            double sunRadius = Planetarium.fetch.Sun.Radius;
+                            double apparentSunRadius = proj * (sunRadius / sunDistD);
+
+                            // Full solid planetary eclipse (e.g. night side of Earth/Kerbin or Mun solar eclipse)
+                            if (perpDist <= bodyRadius)
+                            {
+                                celestialVisibility = 0.0f;
+                                break;
+                            }
+                            // Penumbra / sunset partial eclipse fade over the solar disc
+                            else if (perpDist < bodyRadius + apparentSunRadius)
+                            {
+                                float penumbra = (float)((perpDist - bodyRadius) / apparentSunRadius);
+                                celestialVisibility = Mathf.Min(celestialVisibility, Mathf.Clamp01(penumbra));
+                            }
+
+                            // Atmospheric extinction: if planet has atmosphere, sunlight is absorbed
+                            if (body.atmosphere && body.atmosphereDepth > 0.0)
+                            {
+                                double atmRadius = bodyRadius + body.atmosphereDepth * 0.75;
+                                if (perpDist < atmRadius)
+                                {
+                                    float atmPenetration = (float)((perpDist - bodyRadius) / (body.atmosphereDepth * 0.75));
+                                    float atmTransmission = Mathf.Clamp01(atmPenetration * atmPenetration);
+                                    celestialVisibility = Mathf.Min(celestialVisibility, atmTransmission);
+                                }
+                            }
+                        }
+                    }
+                }
             }
             else if (RenderSettings.sun != null)
             {
@@ -106,7 +163,15 @@ namespace UnityEngine.Rendering.PostProcessing
             Vector3 vp = (context.camera != null) ? context.camera.WorldToViewportPoint(sunPointWorld) : Vector3.zero;
 
             // Allow sun to be up to 0.75 outside the viewport so rays fan into the screen
-            float sunVisible = (vp.z > 0f && vp.x >= -0.75f && vp.x <= 1.75f && vp.y >= -0.75f && vp.y <= 1.75f) ? 1.0f : 0.0f;
+            float inView = (vp.z > 0f && vp.x >= -0.75f && vp.x <= 1.75f && vp.y >= -0.75f && vp.y <= 1.75f) ? 1.0f : 0.0f;
+            float sunVisible = inView * celestialVisibility;
+
+            // Early exit if Sun is occulted or off-screen to save 100% of God Rays rendering overhead
+            if (sunVisible <= 0.001f)
+            {
+                context.command.BlitFullscreenTriangle(context.source, context.destination);
+                return;
+            }
 
             // Auto-adapt intensity based on atmospheric density: dense Tyndall in air, clean optical corona in space
             double atmDensity = (FlightGlobals.ActiveVessel != null) ? FlightGlobals.ActiveVessel.atmDensity : 0.0;

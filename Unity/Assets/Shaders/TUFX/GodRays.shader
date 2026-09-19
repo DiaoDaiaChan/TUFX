@@ -63,10 +63,10 @@ Shader "Hidden/TUFX/GodRays"
             // Celestial anchor disc (tight, radius 0.018) + soft inner corona (radius 0.08)
             float sunDisc = saturate((0.018 - sunDist) / 0.008) * 1.0;
             float sunCorona = exp(-sunDist * 32.0) * 0.7;
-            float anchorSource = sunDisc + sunCorona;
+            float anchorSource = (sunDisc + sunCorona) * _SunVisible;
 
             // Combine scene brightness with solar anchor so god rays always emerge cleanly
-            float sunSource = max(normSource, anchorSource) * occl;
+            float sunSource = max(normSource, anchorSource) * occl * _SunVisible;
 
             return float4(sunSource, sunSource, sunSource, 1.0);
         }
