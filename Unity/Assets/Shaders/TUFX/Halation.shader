@@ -23,21 +23,21 @@ Shader "Hidden/TUFX/Halation"
             return float4(halationColor, 1.0);
         }
 
-        // Pass 1: Horizontal blur
+        // Pass 1: Horizontal blur (7-tap normalized Gaussian)
         float4 FragBlurH(VaryingsDefault i) : SV_Target
         {
             float2 step = float2(_MainTex_TexelSize.x * _Radius, 0.0);
             float4 col = float4(0, 0, 0, 0);
             
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 3.0) * 0.0545;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 2.0) * 0.2442;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 1.0) * 0.4026;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord)              * 0.4026;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 1.0) * 0.4026;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 2.0) * 0.2442;
-            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 3.0) * 0.0545;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 3.0) * 0.00598;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 2.0) * 0.0606;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord - step * 1.0) * 0.2418;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord)              * 0.3831;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 1.0) * 0.2418;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 2.0) * 0.0606;
+            col += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + step * 3.0) * 0.00598;
             
-            return col / 1.8052;
+            return col;
         }
 
         // Pass 2: Vertical blur and composite
@@ -46,14 +46,13 @@ Shader "Hidden/TUFX/Halation"
             float2 step = float2(0.0, _MainTex_TexelSize.y * _Radius);
             float4 blur = float4(0, 0, 0, 0);
 
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 3.0) * 0.0545;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 2.0) * 0.2442;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 1.0) * 0.4026;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord)              * 0.4026;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 1.0) * 0.4026;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 2.0) * 0.2442;
-            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 3.0) * 0.0545;
-            blur = blur / 1.8052;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 3.0) * 0.00598;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 2.0) * 0.0606;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord - step * 1.0) * 0.2418;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord)              * 0.3831;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 1.0) * 0.2418;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 2.0) * 0.0606;
+            blur += SAMPLE_TEXTURE2D(_HalationTex, sampler_HalationTex, i.texcoord + step * 3.0) * 0.00598;
 
             float4 orig = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             return orig + blur * _Intensity;

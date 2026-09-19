@@ -13,7 +13,7 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class ModernTonemapperParameter : ParameterOverride<ModernTonemapper> { }
 
     [Serializable]
-    [PostProcess(typeof(ModernTonemappingRenderer), PostProcessEvent.BeforeStack, "TUFX/Modern Tonemapping")]
+    [PostProcess(typeof(ModernTonemappingRenderer), PostProcessEvent.AfterStack, "TUFX/Modern Tonemapping")]
     public sealed class ModernTonemapping : PostProcessEffectSettings
     {
         [Tooltip("Modern Tonemapper algorithm: AgX, Tony McMapface, or Filmic.")]

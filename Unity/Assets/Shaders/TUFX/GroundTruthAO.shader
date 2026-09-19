@@ -12,10 +12,11 @@ Shader "Hidden/TUFX/GroundTruthAO"
         float _Thickness;
         float _MultiBounce;
         float4 _AOColor;
+        float _MaxDistance;
+        float _FadeRange;
 
-        float3 ReconstructViewPos(float2 uv, float depth)
+        float3 ReconstructViewPos(float2 uv, float linearDepth)
         {
-            float linearDepth = LinearEyeDepth(depth);
             float2 p11_22 = float2(unity_CameraProjection._11, unity_CameraProjection._22);
             float2 clipPos = (uv * 2.0 - 1.0);
             return float3(clipPos / p11_22 * linearDepth, linearDepth);
@@ -25,24 +26,38 @@ Shader "Hidden/TUFX/GroundTruthAO"
         float4 FragGTAO(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
-            if (rawDepth <= 0.00001 || rawDepth >= 0.99999)
+            #if UNITY_REVERSED_Z
+                if (rawDepth <= 0.00001)
+                    return float4(1.0, 1.0, 1.0, 1.0);
+            #else
+                if (rawDepth >= 0.99999)
+                    return float4(1.0, 1.0, 1.0, 1.0);
+            #endif
+
+            float linearDepth = LinearEyeDepth(rawDepth);
+            // Strict distance cutoff: AO only applies to near/medium range geometry
+            if (linearDepth > _MaxDistance || linearDepth <= 0.01)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            float3 centerPos = ReconstructViewPos(i.texcoord, rawDepth);
+            float3 centerPos = ReconstructViewPos(i.texcoord, linearDepth);
             
             // Reconstruct view-space normal from depth derivatives
             float3 dx = ddx(centerPos);
             float3 dy = ddy(centerPos);
             float3 normal = normalize(cross(dx, dy));
+            if (any(isnan(normal)) || any(isinf(normal)))
+            {
+                return float4(1.0, 1.0, 1.0, 1.0);
+            }
 
             // GTAO horizon search parameters
             float occlusion = 0.0;
             const int NUM_DIRECTIONS = 4;
             const int NUM_STEPS = 4;
-            float stepSize = (_Radius / centerPos.z) / (float)NUM_STEPS;
-            stepSize = clamp(stepSize, _MainTex_TexelSize.x, _MainTex_TexelSize.x * 40.0);
+            float stepSize = (_Radius / max(0.1, centerPos.z)) / (float)NUM_STEPS;
+            stepSize = clamp(stepSize, _MainTex_TexelSize.x, _MainTex_TexelSize.x * 20.0);
 
             for (int d = 0; d < NUM_DIRECTIONS; d++)
             {
@@ -54,7 +69,14 @@ Shader "Hidden/TUFX/GroundTruthAO"
                 {
                     float2 sampleUV = i.texcoord + dir * (s * stepSize);
                     float sampleDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, sampleUV);
-                    float3 samplePos = ReconstructViewPos(sampleUV, sampleDepth);
+                    #if UNITY_REVERSED_Z
+                        if (sampleDepth <= 0.00001) continue;
+                    #else
+                        if (sampleDepth >= 0.99999) continue;
+                    #endif
+
+                    float sampleLinear = LinearEyeDepth(sampleDepth);
+                    float3 samplePos = ReconstructViewPos(sampleUV, sampleLinear);
 
                     float3 diff = samplePos - centerPos;
                     float dist2 = dot(diff, diff);
@@ -73,6 +95,13 @@ Shader "Hidden/TUFX/GroundTruthAO"
             occlusion = 1.0 - (occlusion / (float)NUM_DIRECTIONS) * _Intensity;
             occlusion = saturate(occlusion);
 
+            // Smooth distance fade near _MaxDistance
+            if (linearDepth > _MaxDistance - _FadeRange)
+            {
+                float fade = saturate((_MaxDistance - linearDepth) / max(0.001, _FadeRange));
+                occlusion = lerp(1.0, occlusion, fade);
+            }
+
             // Multi-bounce approximation (Jimenez et al.)
             float3 multiBounceAO = lerp(float3(occlusion, occlusion, occlusion), 
                                         occlusion / max(float3(0.01, 0.01, 0.01), (1.0 - 0.25 * (1.0 - occlusion))), 
@@ -84,7 +113,19 @@ Shader "Hidden/TUFX/GroundTruthAO"
         // Pass 1: Edge-preserving Bilateral Blur
         float4 FragBilateralBlur(VaryingsDefault i) : SV_Target
         {
-            float centerDepth = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord));
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
+            #if UNITY_REVERSED_Z
+                if (rawDepth <= 0.00001) return float4(1, 1, 1, 1);
+            #else
+                if (rawDepth >= 0.99999) return float4(1, 1, 1, 1);
+            #endif
+
+            float centerDepth = LinearEyeDepth(rawDepth);
+            if (centerDepth > _MaxDistance)
+            {
+                return float4(1, 1, 1, 1);
+            }
+
             float3 sum = float3(0, 0, 0);
             float totalWeight = 0.0;
 
@@ -112,6 +153,13 @@ Shader "Hidden/TUFX/GroundTruthAO"
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float3 ao = SAMPLE_TEXTURE2D(_AOTex, sampler_AOTex, i.texcoord).rgb;
+            
+            // Safety guard: if G and B are zero due to single-channel format fallback, use R for all three
+            if (ao.g == 0.0 && ao.b == 0.0 && ao.r > 0.0)
+            {
+                ao = ao.rrr;
+            }
+            ao = saturate(ao);
             ao = lerp(_AOColor.rgb, float3(1, 1, 1), ao);
             return float4(scene.rgb * ao, scene.a);
         }

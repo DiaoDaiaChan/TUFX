@@ -18,6 +18,12 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0.005f, 0.2f), Tooltip("Surface thickness test value.")]
         public FloatParameter thickness = new FloatParameter { value = 0.03f };
 
+        [Range(5f, 200f), Tooltip("Maximum distance in meters at which contact shadows are evaluated.")]
+        public FloatParameter maxDistance = new FloatParameter { value = 50.0f };
+
+        [Range(2f, 50f), Tooltip("Distance range over which contact shadows fade out smoothly.")]
+        public FloatParameter fadeRange = new FloatParameter { value = 10.0f };
+
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
             return enabled.value && intensity.value > 0f && SystemInfo.supportsImageEffects;
@@ -29,6 +35,8 @@ namespace UnityEngine.Rendering.PostProcessing
             loadIntParameter(config, "RaySteps", raySteps);
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "Thickness", thickness);
+            loadFloatParameter(config, "MaxDistance", maxDistance);
+            loadFloatParameter(config, "FadeRange", fadeRange);
         }
 
         public override void Save(ConfigNode config)
@@ -37,6 +45,8 @@ namespace UnityEngine.Rendering.PostProcessing
             saveIntParameter(config, "RaySteps", raySteps);
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "Thickness", thickness);
+            saveFloatParameter(config, "MaxDistance", maxDistance);
+            saveFloatParameter(config, "FadeRange", fadeRange);
         }
     }
 
@@ -50,17 +60,41 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Render(PostProcessRenderContext context)
         {
+            // Bypass ScaledSpace camera entirely to prevent depth quantization artifacts on celestial bodies
+            if (ScaledCamera.Instance != null && context.camera == ScaledCamera.Instance.cam)
+            {
+                context.command.BlitFullscreenTriangle(context.source, context.destination);
+                return;
+            }
+
             var shader = (TUFX.TexturesUnlimitedFXLoader.INSTANCE != null) ? TUFX.TexturesUnlimitedFXLoader.INSTANCE.getShader("Hidden/TUFX/ContactShadows") : null;
             if (shader == null) shader = Shader.Find("Hidden/TUFX/ContactShadows");
             if (shader == null) return;
 
-            // Determine light direction in view space (Sun)
+            // Determine light direction in view space (Sun / Main Light)
             Vector3 sunDirWorld = Vector3.up;
-            if (Sun.Instance != null)
+            if (RenderSettings.sun != null)
+            {
+                sunDirWorld = -RenderSettings.sun.transform.forward;
+            }
+            else if (Sun.Instance != null && context.camera != null)
             {
                 sunDirWorld = (Sun.Instance.transform.position - context.camera.transform.position).normalized;
             }
-            Vector3 lightDirView = context.camera.transform.InverseTransformDirection(sunDirWorld);
+            else
+            {
+                var lights = GameObject.FindObjectsOfType<Light>();
+                for (int i = 0; i < lights.Length; i++)
+                {
+                    if (lights[i].type == LightType.Directional && lights[i].isActiveAndEnabled)
+                    {
+                        sunDirWorld = -lights[i].transform.forward;
+                        break;
+                    }
+                }
+            }
+
+            Vector3 lightDirView = (context.camera != null) ? context.camera.transform.InverseTransformDirection(sunDirWorld) : Vector3.forward;
 
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetVector("_LightDirView", lightDirView);
@@ -68,13 +102,16 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetInt("_RaySteps", settings.raySteps.value);
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_Thickness", settings.thickness.value);
+            sheet.properties.SetFloat("_MaxDistance", settings.maxDistance.value);
+            sheet.properties.SetFloat("_FadeRange", settings.fadeRange.value);
 
             int width = context.width;
             int height = context.height;
             int rtShadow = Shader.PropertyToID("_ContactShadowMap");
 
             var cmd = context.command;
-            cmd.GetTemporaryRT(rtShadow, width, height, 0, FilterMode.Bilinear, RenderTextureFormat.R8);
+            // Use ARGB32 to prevent single-channel texture swizzle and avoid channel zeroing bugs
+            cmd.GetTemporaryRT(rtShadow, width, height, 0, FilterMode.Bilinear, RenderTextureFormat.ARGB32);
 
             // Pass 0: Raymarch
             cmd.BlitFullscreenTriangle(context.source, rtShadow, sheet, 0);

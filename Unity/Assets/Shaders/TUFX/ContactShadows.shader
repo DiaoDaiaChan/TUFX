@@ -12,10 +12,11 @@ Shader "Hidden/TUFX/ContactShadows"
         int _RaySteps;
         float _Intensity;
         float _Thickness;
+        float _MaxDistance;
+        float _FadeRange;
 
-        float3 ReconstructViewPos(float2 uv, float depth)
+        float3 ReconstructViewPos(float2 uv, float linearDepth)
         {
-            float linearDepth = LinearEyeDepth(depth);
             float2 p11_22 = float2(unity_CameraProjection._11, unity_CameraProjection._22);
             float2 clipPos = (uv * 2.0 - 1.0);
             return float3(clipPos / p11_22 * linearDepth, linearDepth);
@@ -25,17 +26,26 @@ Shader "Hidden/TUFX/ContactShadows"
         float4 FragContactShadows(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
-            if (rawDepth <= 0.00001 || rawDepth >= 0.99999)
+            #if UNITY_REVERSED_Z
+                if (rawDepth <= 0.00001) return float4(1.0, 1.0, 1.0, 1.0);
+            #else
+                if (rawDepth >= 0.99999) return float4(1.0, 1.0, 1.0, 1.0);
+            #endif
+
+            float linearDepth = LinearEyeDepth(rawDepth);
+            // Strict distance cutoff: contact shadows are screen-space micro-shadows (<= 50m)
+            if (linearDepth > _MaxDistance || linearDepth <= 0.01)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            float3 originPos = ReconstructViewPos(i.texcoord, rawDepth);
+            float3 originPos = ReconstructViewPos(i.texcoord, linearDepth);
             float3 rayDir = normalize(_LightDirView);
 
             // Project light direction into screen space
             float3 endPos = originPos + rayDir * _RayLength;
             float4 endClip = mul(unity_CameraProjection, float4(endPos, 1.0));
+            if (abs(endClip.w) < 0.0001) return float4(1.0, 1.0, 1.0, 1.0);
             float2 endUV = (endClip.xy / endClip.w) * 0.5 + 0.5;
             float2 rayStepUV = (endUV - i.texcoord) / (float)_RaySteps;
 
@@ -48,16 +58,29 @@ Shader "Hidden/TUFX/ContactShadows"
                     break;
 
                 float sampleRawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, sampleUV);
+                #if UNITY_REVERSED_Z
+                    if (sampleRawDepth <= 0.00001) continue;
+                #else
+                    if (sampleRawDepth >= 0.99999) continue;
+                #endif
+
                 float sampleLinearDepth = LinearEyeDepth(sampleRawDepth);
 
                 float expectedDepth = originPos.z + rayDir.z * (_RayLength * (float)s / (float)_RaySteps);
                 float depthDiff = expectedDepth - sampleLinearDepth;
 
-                if (depthDiff > 0.005 && depthDiff < _Thickness)
+                if (depthDiff > 0.002 && depthDiff < _Thickness)
                 {
                     shadow = 1.0 - _Intensity;
                     break;
                 }
+            }
+
+            // Smooth distance fade near _MaxDistance
+            if (linearDepth > _MaxDistance - _FadeRange)
+            {
+                float fade = saturate((_MaxDistance - linearDepth) / max(0.001, _FadeRange));
+                shadow = lerp(1.0, shadow, fade);
             }
 
             return float4(shadow, shadow, shadow, 1.0);
@@ -68,6 +91,7 @@ Shader "Hidden/TUFX/ContactShadows"
         {
             float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, i.texcoord).r;
+            shadow = saturate(shadow);
             return float4(col.rgb * shadow, col.a);
         }
     ENDHLSL
