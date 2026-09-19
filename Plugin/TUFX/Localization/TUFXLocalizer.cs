@@ -97,6 +97,7 @@ namespace TUFX
 
             // Parameters
             { "HDR", "#LOC_TUFX_Param_HDR" },
+            { "Resolution Scale", "#LOC_TUFX_Param_ResolutionScale" },
             { "Primary Camera Antialiasing", "#LOC_TUFX_Param_PrimaryAA" },
             { "Secondary Camera Antialiasing", "#LOC_TUFX_Param_SecondaryAA" },
             { "Intensity", "#LOC_TUFX_Param_Intensity" },

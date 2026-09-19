@@ -6,6 +6,9 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(GroundTruthAORenderer), PostProcessEvent.BeforeStack, "TUFX/Ground Truth Ambient Occlusion (GTAO)", sortingPriority: 20)]
     public sealed class GroundTruthAO : PostProcessEffectSettings
     {
+        [Range(0.25f, 1.0f), Tooltip("Resolution scale of the GTAO pass (1.0 = Full Resolution, 0.5 = Half Resolution, 0.25 = Quarter Resolution).")]
+        public FloatParameter resolutionScale = new FloatParameter { value = 1.0f };
+
         [Range(0.05f, 5f), Tooltip("Radius of the occlusion sampling sphere in view space.")]
         public FloatParameter radius = new FloatParameter { value = 1.0f };
 
@@ -31,6 +34,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Load(ConfigNode config)
         {
+            loadFloatParameter(config, "ResolutionScale", resolutionScale);
             loadFloatParameter(config, "Radius", radius);
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "Thickness", thickness);
@@ -41,6 +45,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Save(ConfigNode config)
         {
+            saveFloatParameter(config, "ResolutionScale", resolutionScale);
             saveFloatParameter(config, "Radius", radius);
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "Thickness", thickness);
@@ -105,8 +110,9 @@ namespace UnityEngine.Rendering.PostProcessing
                 sheet.properties.SetMatrix("_WorldToCameraMatrix", context.camera.worldToCameraMatrix);
             }
 
-            int width = context.width;
-            int height = context.height;
+            float scale = Mathf.Clamp(settings.resolutionScale.value, 0.25f, 1.0f);
+            int width = Mathf.Max(1, Mathf.RoundToInt(context.width * scale));
+            int height = Mathf.Max(1, Mathf.RoundToInt(context.height * scale));
             int rtRawAO = Shader.PropertyToID("_GTAORaw");
             int rtBlurAO = Shader.PropertyToID("_GTAOBlur");
 

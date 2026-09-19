@@ -858,6 +858,7 @@ namespace TUFX
             bool showProps = AddEffectHeader("Ground Truth AO (GTAO)", out GroundTruthAO gtao);
             if (showProps)
             {
+                AddFloatParameter("Resolution Scale", gtao.resolutionScale, 0.25f, 1.0f);
                 AddFloatParameter("Radius", gtao.radius, 0.05f, 5f);
                 AddFloatParameter("Intensity", gtao.intensity, 0f, 4f);
                 AddFloatParameter("Thickness", gtao.thickness, 0.1f, 5f);
@@ -1012,6 +1013,7 @@ namespace TUFX
             bool showProps = AddEffectHeader("Screen Space Global Illumination (SSGI)", out SSGIEffect ssgi);
             if (showProps)
             {
+                AddFloatParameter("Resolution Scale", ssgi.resolutionScale, 0.25f, 1.0f);
                 AddFloatParameter("Intensity", ssgi.intensity, 0f, 5f);
                 AddIntParameter("Ray Count", ssgi.rayCount, 2, 8);
                 AddIntParameter("Ray Steps", ssgi.raySteps, 4, 16);

@@ -7,6 +7,9 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(SSGIRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space Global Illumination (SSGI)", sortingPriority: 22)]
     public sealed class SSGIEffect : PostProcessEffectSettings
     {
+        [Range(0.25f, 1.0f), Tooltip("Resolution scale of the SSGI pass (1.0 = Full Resolution, 0.5 = Half Resolution, 0.25 = Quarter Resolution).")]
+        public FloatParameter resolutionScale = new FloatParameter { value = 0.5f };
+
         [Range(0f, 5f), Tooltip("Global illumination bounce brightness multiplier.")]
         public FloatParameter intensity = new FloatParameter { value = 2.0f };
 
@@ -32,6 +35,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Load(ConfigNode config)
         {
+            loadFloatParameter(config, "ResolutionScale", resolutionScale);
             loadFloatParameter(config, "Intensity", intensity);
             loadIntParameter(config, "RayCount", rayCount);
             loadIntParameter(config, "RaySteps", raySteps);
@@ -42,6 +46,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Save(ConfigNode config)
         {
+            saveFloatParameter(config, "ResolutionScale", resolutionScale);
             saveFloatParameter(config, "Intensity", intensity);
             saveIntParameter(config, "RayCount", rayCount);
             saveIntParameter(config, "RaySteps", raySteps);
@@ -105,16 +110,17 @@ namespace UnityEngine.Rendering.PostProcessing
                 sheet.properties.SetMatrix("_WorldToCameraMatrix", context.camera.worldToCameraMatrix);
             }
 
-            int halfW = Mathf.Max(1, context.width / 2);
-            int halfH = Mathf.Max(1, context.height / 2);
+            float scale = Mathf.Clamp(settings.resolutionScale.value, 0.25f, 1.0f);
+            int rtW = Mathf.Max(1, Mathf.RoundToInt(context.width * scale));
+            int rtH = Mathf.Max(1, Mathf.RoundToInt(context.height * scale));
             int rtRawSSGI = Shader.PropertyToID("_SSGIRaw");
             int rtDenoiseSSGI_H = Shader.PropertyToID("_SSGIDenoise_H");
             int rtDenoiseSSGI_V = Shader.PropertyToID("_SSGIDenoise_V");
 
             var cmd = context.command;
-            cmd.GetTemporaryRT(rtRawSSGI, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
-            cmd.GetTemporaryRT(rtDenoiseSSGI_H, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
-            cmd.GetTemporaryRT(rtDenoiseSSGI_V, halfW, halfH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
+            cmd.GetTemporaryRT(rtRawSSGI, rtW, rtH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
+            cmd.GetTemporaryRT(rtDenoiseSSGI_H, rtW, rtH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
+            cmd.GetTemporaryRT(rtDenoiseSSGI_V, rtW, rtH, 0, FilterMode.Bilinear, RenderTextureFormat.ARGBHalf);
 
             // Pass 0: Raymarching at half resolution with Karis anti-firefly weighting
             cmd.BlitFullscreenTriangle(context.source, rtRawSSGI, sheet, 0);
