@@ -66,7 +66,7 @@ namespace TUFX
         {
             try
             {
-                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, "TUFX: Beyond");
+                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, "TUFX: Beyond".Localize());
             }
             catch (Exception e)
             {
@@ -89,20 +89,20 @@ namespace TUFX
             var allProfilers = TexturesUnlimitedFXLoader.INSTANCE.Profiles;
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Mode: ", GUILayout.Width(50));
+            GUILayout.Label("Mode: ".Localize(), GUILayout.Width(50));
             GUIMode currentMode = this.selectionMode;
 
-            if (GUILayout.Toggle(currentMode == GUIMode.SelectProfile, "Profiles", GUI.skin.button, GUILayout.Width(80)))
+            if (GUILayout.Toggle(currentMode == GUIMode.SelectProfile, "Profiles".Localize(), GUI.skin.button, GUILayout.Width(80)))
             {
                 this.selectionMode = GUIMode.SelectProfile;
             }
-            if (GUILayout.Toggle(currentMode == GUIMode.EditProfile, "Stock FX", GUI.skin.button, GUILayout.Width(80)))
+            if (GUILayout.Toggle(currentMode == GUIMode.EditProfile, "Stock FX".Localize(), GUI.skin.button, GUILayout.Width(80)))
             {
                 this.selectionMode = GUIMode.EditProfile;
             }
             Color prevColor = GUI.color;
             GUI.color = new Color(0.3f, 0.9f, 1.0f);
-            if (GUILayout.Toggle(currentMode == GUIMode.ExtendFX, "ExtendFX ★", GUI.skin.button, GUILayout.Width(100)))
+            if (GUILayout.Toggle(currentMode == GUIMode.ExtendFX, "ExtendFX ★".Localize(), GUI.skin.button, GUILayout.Width(100)))
             {
                 this.selectionMode = GUIMode.ExtendFX;
             }
@@ -110,7 +110,7 @@ namespace TUFX
 
             if (currentMode > GUIMode.ExtendFX)
             {
-                if (GUILayout.Button("Return", GUILayout.Width(65)))
+                if (GUILayout.Button("Return".Localize(), GUILayout.Width(65)))
                 {
                     this.selectionMode = GUIMode.ExtendFX;
                     this.textures.Clear();
@@ -122,12 +122,12 @@ namespace TUFX
             // save current / reload current
             if (currentMode <= GUIMode.ExtendFX && currentProfile != null)
             {
-                if (GUILayout.Button("Save Selected", GUILayout.Width(100)))
+                if (GUILayout.Button("Save Selected".Localize(), GUILayout.Width(100)))
                 {
                     currentProfile.SaveToDisk();
-                    ScreenMessages.PostScreenMessage("<color=orange>Saved selected profile to cfg</color>", 5f, ScreenMessageStyle.UPPER_LEFT);
+                    ScreenMessages.PostScreenMessage("#LOC_TUFX_Msg_SavedSelected".Localize("<color=orange>Saved selected profile to cfg</color>"), 5f, ScreenMessageStyle.UPPER_LEFT);
                 }
-                if (GUILayout.Button("Reload Selected", GUILayout.Width(105)))
+                if (GUILayout.Button("Reload Selected".Localize(), GUILayout.Width(105)))
                 {
                     currentProfile.ReloadFromNode();
                     TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
@@ -136,15 +136,15 @@ namespace TUFX
 
             if (currentMode == GUIMode.SelectProfile)
             {
-                if (GUILayout.Button("Save All", GUILayout.Width(75)))
+                if (GUILayout.Button("Save All".Localize(), GUILayout.Width(75)))
                 {
                     foreach (var profile in allProfilers.Values)
                     {
                         profile.SaveToDisk();
                     }
-                    ScreenMessages.PostScreenMessage("<color=orange>Saved all profiles to cfg files</color>", 5f, ScreenMessageStyle.UPPER_LEFT);
+                    ScreenMessages.PostScreenMessage("#LOC_TUFX_Msg_SavedAll".Localize("<color=orange>Saved all profiles to cfg files</color>"), 5f, ScreenMessageStyle.UPPER_LEFT);
                 }
-                if (GUILayout.Button("Reload All", GUILayout.Width(85)))
+                if (GUILayout.Button("Reload All".Localize(), GUILayout.Width(85)))
                 {
                     foreach (var profile in allProfilers.Values)
                     {
@@ -154,7 +154,7 @@ namespace TUFX
                 }
             }
 
-            if (GUILayout.Button("Close", GUILayout.Width(60)))
+            if (GUILayout.Button("Close".Localize(), GUILayout.Width(60)))
             {
                 TexturesUnlimitedFXLoader.INSTANCE.CloseConfigGui();
             }
@@ -190,16 +190,16 @@ namespace TUFX
 
         private void renderSelectionWindow()
         {
-            AddLabelRow("Current Scene: " + HighLogic.LoadedScene +" map view active: " + MapView.MapIsEnabled + " internal cam active: " + (InternalCamera.Instance != null && InternalCamera.Instance.isActive));
-            AddLabelRow("Current Profile: " + TexturesUnlimitedFXLoader.INSTANCE.CurrentProfileName);
-            AddLabelRow("Select a new profile for current scene: ");
+            AddLabelRow("Current Scene: ".Localize() + HighLogic.LoadedScene +" map view active: " + MapView.MapIsEnabled + " internal cam active: " + (InternalCamera.Instance != null && InternalCamera.Instance.isActive));
+            AddLabelRow("Current Profile: ".Localize() + TexturesUnlimitedFXLoader.INSTANCE.CurrentProfileName);
+            AddLabelRow("Select a new profile for current scene: ".Localize());
             scrollPos = GUILayout.BeginScrollView(scrollPos);
             GUILayout.BeginVertical();
             int len = profileNames.Count;
             for (int i = 0; i < len; i++)
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Profile: " + profileNames[i]))
+                if (GUILayout.Button("Profile: ".Localize() + profileNames[i]))
                 {
                     string newProfileName = profileNames[i];
                     Log.debug("Profile Selected: " + newProfileName);
@@ -216,17 +216,17 @@ namespace TUFX
             if (TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile == null)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("No Profile Selected!");
+                GUILayout.Label("No Profile Selected!".Localize());
                 GUILayout.EndHorizontal();
                 return;
             }
 
             GUILayout.BeginHorizontal(HighLogic.Skin.box);
-            GUILayout.Label("<b>Stock TUFX Post-Processing Effects</b>");
+            GUILayout.Label("<b>Stock TUFX Post-Processing Effects</b>".Localize());
             GUILayout.FlexibleSpace();
             Color prev = GUI.color;
             GUI.color = new Color(0.3f, 0.9f, 1.0f);
-            if (GUILayout.Button("Open ExtendFX Suite (FSR, AgX/ACES, GTAO, SSR) >>", GUILayout.Width(350)))
+            if (GUILayout.Button("Open ExtendFX Suite (FSR, AgX/ACES, GTAO, SSR) >>".Localize(), GUILayout.Width(350)))
             {
                 this.selectionMode = GUIMode.ExtendFX;
             }
@@ -256,15 +256,15 @@ namespace TUFX
             if (TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile == null)
             {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("No Profile Selected!");
+                GUILayout.Label("No Profile Selected!".Localize());
                 GUILayout.EndHorizontal();
                 return;
             }
 
             GUILayout.BeginHorizontal(HighLogic.Skin.box);
-            GUILayout.Label("<color=#55CCFF><b>[ExtendFX] Next-Gen Advanced Visual Effects & Upgrades</b></color>");
+            GUILayout.Label("<color=#55CCFF><b>[ExtendFX] Next-Gen Advanced Visual Effects & Upgrades</b></color>".Localize());
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("<< Switch to Stock FX", GUILayout.Width(170)))
+            if (GUILayout.Button("<< Switch to Stock FX".Localize(), GUILayout.Width(170)))
             {
                 this.selectionMode = GUIMode.EditProfile;
             }
@@ -327,18 +327,18 @@ namespace TUFX
         private void renderDynamicContextSettings()
         {
             GUILayout.BeginVertical(HighLogic.Skin.box);
-            GUILayout.Label("<b>Dynamic Flight Context Adaptation</b>");
-            TUFXDynamicContextManager.Enabled = GUILayout.Toggle(TUFXDynamicContextManager.Enabled, "Enable Real-time Environment Adaptation (Reentry Heat Haze & EVA Mode)");
-            GUILayout.Label("<size=10><color=grey>Smoothly controls heat distortion during hypersonic reentry (Mach > 3) and astronaut visor curvature.</color></size>");
+            GUILayout.Label("<b>Dynamic Flight Context Adaptation</b>".Localize());
+            TUFXDynamicContextManager.Enabled = GUILayout.Toggle(TUFXDynamicContextManager.Enabled, "Enable Real-time Environment Adaptation (Reentry Heat Haze & EVA Mode)".Localize());
+            GUILayout.Label("#LOC_TUFX_Desc_DynamicContext".Localize("<size=10><color=grey>Smoothly controls heat distortion during hypersonic reentry (Mach > 3) and astronaut visor curvature.</color></size>"));
             GUILayout.EndVertical();
         }
 
         private void renderTextureSelectWindow()
         {
             GUILayout.BeginVertical();
-            GUILayout.Label("Effect: " + effect);
-            GUILayout.Label("Property: " + property);
-            GUILayout.Label("Current: " + texture);
+            GUILayout.Label("Effect: ".Localize() + effect);
+            GUILayout.Label("Property: ".Localize() + property);
+            GUILayout.Label("Current: ".Localize() + texture);
             texScrollPos = GUILayout.BeginScrollView(texScrollPos);
             int len = textures.Count;
             for (int i = 0; i < len; i++)
@@ -396,9 +396,9 @@ namespace TUFX
         private void renderHDRSettings()
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label("HDR", GUILayout.Width(200));
+            GUILayout.Label("HDR".Localize(), GUILayout.Width(200));
             bool enabled = TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile.HDREnabled;
-            string buttonText = enabled ? "Disable" : "Enable";
+            string buttonText = enabled ? "Disable".Localize() : "Enable".Localize();
 			if (GUILayout.Button(buttonText, GUILayout.Width(100)))
 			{
                 TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile.HDREnabled = !enabled;
@@ -763,10 +763,10 @@ namespace TUFX
             {
                 GUILayout.BeginVertical(HighLogic.Skin.box);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("<b>SMAA Quality Preset:</b>", GUILayout.Width(150));
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Low, "Low", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Low; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Medium, "Medium", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Medium; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
-                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.High, "High (Ultra)", GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                GUILayout.Label("<b>SMAA Quality Preset:</b>".Localize(), GUILayout.Width(150));
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Low, "Low".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Low; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.Medium, "Medium".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.Medium; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
+                if (GUILayout.Toggle(profile.SMAAQuality == SubpixelMorphologicalAntialiasing.Quality.High, "High (Ultra)".Localize(), GUI.skin.button)) { profile.SMAAQuality = SubpixelMorphologicalAntialiasing.Quality.High; TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras(); }
                 GUILayout.EndHorizontal();
                 GUILayout.EndVertical();
             }
@@ -781,7 +781,7 @@ namespace TUFX
             {
                 AddFloatParameter("Edge Sensitivity", cmaa.edgeThreshold, 0.02f, 0.25f);
                 AddFloatParameter("Extra Sharpness", cmaa.extraSharpness, 0.1f, 1.0f);
-                GUILayout.Label("<size=10><color=grey>Intel's state-of-the-art morphological AA algorithm. Extremely sharp edge smoothing without temporal ghosting or blur.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_CMAA2".Localize("<size=10><color=grey>Intel's state-of-the-art morphological AA algorithm. Extremely sharp edge smoothing without temporal ghosting or blur.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -793,7 +793,7 @@ namespace TUFX
             {
                 AddEnumParameter("Quality Mode", fsr.quality);
                 AddFloatParameter("Sharpness (RCAS)", fsr.sharpness, 0f, 1f);
-                GUILayout.Label("<size=10><color=grey>AMD FSR 1.0 Edge-Adaptive Spatial Upsampling (EASU) with 12-tap directional reconstruction. Renders at sub-native scale (50%~77%) for massive FPS gains while preserving razor-sharp geometry.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_FSR".Localize("<size=10><color=grey>AMD FSR 1.0 Edge-Adaptive Spatial Upsampling (EASU) with 12-tap directional reconstruction. Renders at sub-native scale (50%~77%) for massive FPS gains while preserving razor-sharp geometry.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -804,7 +804,7 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Sharpness", cas.sharpness, 0f, 1f);
-                GUILayout.Label("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening (RCAS). Combine with CMAA 2 / SMAA / TAA above for crystal-clear antialiased visuals!</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_CAS".Localize("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening (RCAS). Combine with CMAA 2 / SMAA / TAA above for crystal-clear antialiased visuals!</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -818,7 +818,7 @@ namespace TUFX
                 AddFloatParameter("Exposure", mt.exposure, 0.05f, 5f);
                 AddFloatParameter("Contrast", mt.contrast, 0.5f, 2.5f);
                 AddFloatParameter("Saturation", mt.saturation, 0f, 2f);
-                GUILayout.Label("<size=10><color=grey>ACES provides punchy cinematic contrast and deep space blacks. AgX provides smooth highlight roll-off.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_ModernTonemapping".Localize("<size=10><color=grey>ACES provides punchy cinematic contrast and deep space blacks. AgX provides smooth highlight roll-off.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -832,6 +832,7 @@ namespace TUFX
                 AddFloatParameter("Threshold", h.threshold, 0.1f, 10f);
                 AddFloatParameter("Radius", h.radius, 0.5f, 10f);
                 AddColorParameter("Color Tint", h.colorTint);
+                GUILayout.Label("#LOC_TUFX_Desc_Halation".Localize("<size=10><color=grey>Authentic analog 35mm film halation red-orange glow bleeding around high-contrast overexposed edges.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -859,7 +860,7 @@ namespace TUFX
                 {
                     AddFloatParameter("Letterbox Ratio", af.letterboxRatio, 1.85f, 3.0f);
                 }
-                GUILayout.Label("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, diffraction starbursts, and cinematic letterbox black bars.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_AnamorphicFlare".Localize("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, diffraction starbursts, and cinematic letterbox black bars.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -875,6 +876,7 @@ namespace TUFX
                 AddFloatParameter("Multi-Bounce", gtao.multiBounce, 0f, 1f);
                 AddFloatParameter("Specular Occlusion", gtao.specularOcclusion, 0f, 1f);
                 AddColorParameter("Color", gtao.color);
+                GUILayout.Label("#LOC_TUFX_Desc_GTAO".Localize("<size=10><color=grey>Intel Ground Truth Ambient Occlusion (GTAO) with multi-bounce ambient filling and specular reflection occlusion.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -888,7 +890,7 @@ namespace TUFX
                 AddIntParameter("Steps", cs.raySteps, 4, 16);
                 AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
                 AddFloatParameter("Thickness", cs.thickness, 0.01f, 0.2f);
-                GUILayout.Label("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages and landing gear.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_ContactShadows".Localize("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages and landing gear.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -905,7 +907,7 @@ namespace TUFX
                 AddFloatParameter("Decay", gr.decay, 0.8f, 0.99f);
                 AddFloatParameter("Weight", gr.weight, 0.05f, 1f);
                 AddColorParameter("Ray Color", gr.rayColor);
-                GUILayout.Label("<size=10><color=grey>Simulates dramatic Tyndall volumetric light shafts in atmosphere, and crisp optical lens corona in vacuum.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_GodRays".Localize("<size=10><color=grey>Simulates dramatic Tyndall volumetric light shafts in atmosphere, and crisp optical lens corona in vacuum.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -920,8 +922,8 @@ namespace TUFX
                 {
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(20);
-                    GUILayout.Label($"Tracking: <color=#88FF88>{SpectralBokeh.LastFocusedDistance:F1} m</color>", GUILayout.Width(180));
-                    if (GUILayout.Button("Lock / Switch to Manual", GUILayout.Width(170)))
+                    GUILayout.Label($"{"Tracking: ".Localize()}<color=#88FF88>{SpectralBokeh.LastFocusedDistance:F1} m</color>", GUILayout.Width(180));
+                    if (GUILayout.Button("Lock / Switch to Manual".Localize(), GUILayout.Width(170)))
                     {
                         sb.focusDistance.Override(SpectralBokeh.LastFocusedDistance);
                         sb.autoFocus.Override(false);
@@ -936,7 +938,7 @@ namespace TUFX
                     AddFloatParameter("Focus Distance", sb.focusDistance, 0.1f, 500f);
                     GUILayout.BeginHorizontal();
                     GUILayout.Space(20);
-                    if (GUILayout.Button("Auto-Focus Once", GUILayout.Width(150)))
+                    if (GUILayout.Button("Auto-Focus Once".Localize(), GUILayout.Width(150)))
                     {
                         float instantDist = SpectralBokeh.ComputeTargetDistance(Camera.main, sb.focusDistance.value);
                         sb.focusDistance.Override(instantDist);
@@ -949,7 +951,7 @@ namespace TUFX
                 AddFloatParameter("Anamorphic Ratio", sb.anamorphicRatio, 0.5f, 3.0f);
                 AddFloatParameter("Dispersion", sb.dispersionStrength, 0f, 2f);
                 AddFloatParameter("Max Bokeh Radius", sb.maxBokehRadius, 1f, 20f);
-                GUILayout.Label("<size=10><color=grey>Physically-simulated optical chromatic DoF with auto tracking, rainbow dispersion, and 2x Hollywood oval bokeh.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_SpectralBokeh".Localize("<size=10><color=grey>Physically-simulated optical chromatic DoF with auto tracking, rainbow dispersion, and 2x Hollywood oval bokeh.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -964,7 +966,7 @@ namespace TUFX
                 AddFloatParameter("Blur Multiplier", cmb.blurMultiplier, 0.5f, 5f);
                 AddIntParameter("Samples", cmb.sampleCount, 4, 16);
                 AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 10f, 128f);
-                GUILayout.Label("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors. Blur Multiplier boosts high-speed atmospheric flight streaks and camera spin.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_CameraMotionBlur".Localize("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors. Blur Multiplier boosts high-speed atmospheric flight streaks and camera spin.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -980,7 +982,7 @@ namespace TUFX
                 GUILayout.BeginVertical(HighLogic.Skin.box);
                 GUILayout.Label($"[SSR Pipeline] Status: {(isDeferred ? "<color=green>Deferred Active (Full PBR SSR)</color>" : "<color=yellow>Forward Active (SSSR Mode)</color>")}");
                 GUILayout.Label($"Deferred Mod: {(hasDeferredMod ? "Detected" : "Not Detected")}, Camera: {(Camera.main != null ? Camera.main.actualRenderingPath.ToString() : "N/A")}");
-                if (GUILayout.Button("Print SSR Diagnostics to KSP.log", GUILayout.Width(260)))
+                if (GUILayout.Button("Print SSR Diagnostics to KSP.log".Localize(), GUILayout.Width(260)))
                 {
                     Log.log($"[TUFX SSR Diagnostics] Camera: {Camera.main?.name}, Path: {Camera.main?.actualRenderingPath}, DeferredMod: {hasDeferredMod}, MotionVectors: {SystemInfo.supportsMotionVectors}, ComputeShaders: {SystemInfo.supportsComputeShaders}, CopyTexture: {SystemInfo.copyTextureSupport}");
                 }
@@ -1012,7 +1014,7 @@ namespace TUFX
                 AddFloatParameter("Scale", hd.scale, 1f, 30f);
                 AddFloatParameter("Plume Threshold", hd.plumeThreshold, 0.5f, 10f);
                 AddFloatParameter("Ground Altitude Limit", hd.groundAltitudeLimit, 100f, 3000f);
-                GUILayout.Label("<size=10><color=grey>AutoAdaptive mode confines turbulence to engine plumes and low-altitude terrain shimmer, keeping vehicle & sky clear.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_HeatDistortion".Localize("<size=10><color=grey>AutoAdaptive mode confines turbulence to engine plumes and low-altitude terrain shimmer, keeping vehicle & sky clear.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -1028,7 +1030,7 @@ namespace TUFX
                 AddFloatParameter("Ray Length (m)", ssgi.rayLength, 0.5f, 30f);
                 AddFloatParameter("Thickness", ssgi.thickness, 0.1f, 5f);
                 AddColorParameter("Bounce Color", ssgi.bounceColor);
-                GUILayout.Label("<size=10><color=grey>Single-bounce screen-space diffuse indirect illumination & realistic color bleeding from terrain and nearby vehicle hulls.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_SSGI".Localize("<size=10><color=grey>Single-bounce screen-space diffuse indirect illumination & realistic color bleeding from terrain and nearby vehicle hulls.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -1047,7 +1049,7 @@ namespace TUFX
                 {
                     AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
                 }
-                GUILayout.Label("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Auto Adapt dynamically matches scattering to surface albedo chrominance, keeping metallic spacecraft clean and neutral while giving Kerbals a rich green subcutaneous glow.</color></size>");
+                GUILayout.Label("#LOC_TUFX_Desc_SSSS".Localize("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Auto Adapt dynamically matches scattering to surface albedo chrominance, keeping metallic spacecraft clean and neutral while giving Kerbals a rich green subcutaneous glow.</color></size>"));
             }
             GUILayout.EndVertical();
         }
@@ -1073,7 +1075,7 @@ namespace TUFX
 				effectBoolStorage[label] = showProps;
 			}
 
-			enabled = GUILayout.Toggle(enabled, label);
+			enabled = GUILayout.Toggle(enabled, label.Localize());
 
 			GUILayout.EndHorizontal();
             GUILayout.EndVertical();
@@ -1118,7 +1120,7 @@ namespace TUFX
         bool DrawParamToggle(string label, ParameterOverride param)
         {
             bool prev = param.overrideState;
-			param.overrideState = GUILayout.Toggle(param.overrideState, label, GUILayout.Width(200), GUILayout.Height(22));
+			param.overrideState = GUILayout.Toggle(param.overrideState, label.Localize(), GUILayout.Width(200), GUILayout.Height(22));
             if (param.overrideState != prev)
             {
                 TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
@@ -1163,7 +1165,7 @@ namespace TUFX
             Tenum[] values = (Tenum[])Enum.GetValues(type);
             int index = values.IndexOf(value);
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(300));
+            GUILayout.Label(label.Localize(), GUILayout.Width(300));
             bool changed = false;
             if (GUILayout.Button("<", GUILayout.Width(110)))
             {
@@ -1289,10 +1291,10 @@ namespace TUFX
             if (DrawParamToggle(label, param))
             {
                 string hash = param.GetHashCode().ToString();
-                AddColorInput("Red", hash, ref param.value.r);
-                AddColorInput("Green", hash, ref param.value.g);
-                AddColorInput("Blue", hash, ref param.value.b);
-                AddColorInput("Alpha", hash, ref param.value.a);
+                AddColorInput("Red".Localize(), hash, ref param.value.r);
+                AddColorInput("Green".Localize(), hash, ref param.value.g);
+                AddColorInput("Blue".Localize(), hash, ref param.value.b);
+                AddColorInput("Alpha".Localize(), hash, ref param.value.a);
             }
             GUILayout.EndHorizontal();
         }
@@ -1361,7 +1363,7 @@ namespace TUFX
             GUILayout.BeginHorizontal();
             if (DrawParamToggle(label, param))
             {
-                string texLabel = param.value == null ? "Nothing selected" : param.value.name;
+                string texLabel = param.value == null ? "Nothing selected".Localize() : param.value.name;
                 if (GUILayout.Button(texLabel, GUILayout.Width(440)))
                 {
                     this.selectionMode = GUIMode.SelectTexture;
