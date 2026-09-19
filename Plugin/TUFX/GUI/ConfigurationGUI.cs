@@ -852,6 +852,8 @@ namespace TUFX
                 AddIntParameter("Spike Count", af.spikeCount, 4, 8);
                 AddFloatParameter("Spike Length", af.spikeLength, 0.5f, 10f);
                 AddFloatParameter("Threshold", af.threshold, 0.5f, 15f);
+                AddFloatParameter("Soft Knee", af.softKnee, 0f, 1f);
+                AddFloatParameter("Max Brightness", af.maxBrightness, 5f, 50f);
                 GUILayout.Label("<size=10><color=grey>Cinema anamorphic optical flares with horizontal spectral streaks, lens ghosts, and diffraction starbursts.</color></size>");
             }
             GUILayout.EndVertical();

@@ -39,6 +39,12 @@ namespace UnityEngine.Rendering.PostProcessing
         [Range(0.5f, 15f), Tooltip("Luminance threshold.")]
         public FloatParameter threshold = new FloatParameter { value = 1.5f };
 
+        [Range(0f, 1f), Tooltip("Soft threshold knee to prevent hard specular clipping.")]
+        public FloatParameter softKnee = new FloatParameter { value = 0.5f };
+
+        [Range(5f, 50f), Tooltip("Maximum brightness clamp to prevent specular blowout on metallic surfaces.")]
+        public FloatParameter maxBrightness = new FloatParameter { value = 25.0f };
+
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
             return enabled.value && (streakIntensity.value > 0f || spikeIntensity.value > 0f || ghostIntensity.value > 0f);
@@ -57,6 +63,8 @@ namespace UnityEngine.Rendering.PostProcessing
             loadIntParameter(config, "SpikeCount", spikeCount);
             loadFloatParameter(config, "SpikeLength", spikeLength);
             loadFloatParameter(config, "Threshold", threshold);
+            loadFloatParameter(config, "SoftKnee", softKnee);
+            loadFloatParameter(config, "MaxBrightness", maxBrightness);
         }
 
         public override void Save(ConfigNode config)
@@ -72,6 +80,8 @@ namespace UnityEngine.Rendering.PostProcessing
             saveIntParameter(config, "SpikeCount", spikeCount);
             saveFloatParameter(config, "SpikeLength", spikeLength);
             saveFloatParameter(config, "Threshold", threshold);
+            saveFloatParameter(config, "SoftKnee", softKnee);
+            saveFloatParameter(config, "MaxBrightness", maxBrightness);
         }
     }
 
@@ -85,51 +95,86 @@ namespace UnityEngine.Rendering.PostProcessing
             if (shader == null) return;
 
             var sheet = context.propertySheets.Get(shader);
+
+            // Soft-knee threshold setup
+            float lthresh = Mathf.GammaToLinearSpace(settings.threshold.value);
+            float knee = lthresh * Mathf.Clamp01(settings.softKnee.value) + 1e-5f;
+            var thresholdVec = new Vector4(lthresh, lthresh - knee, knee * 2f, 0.25f / knee);
+            sheet.properties.SetVector("_ThresholdParams", thresholdVec);
+
+            sheet.properties.SetVector("_FlareParams", new Vector4(
+                Mathf.GammaToLinearSpace(settings.maxBrightness.value),
+                settings.streakLength.value,
+                settings.dispersion.value,
+                0f
+            ));
+
             sheet.properties.SetFloat("_StreakIntensity", settings.streakIntensity.value);
             sheet.properties.SetFloat("_StreakLength", settings.streakLength.value);
             sheet.properties.SetColor("_StreakColor", settings.streakColor.value);
             sheet.properties.SetFloat("_GhostIntensity", settings.ghostIntensity.value);
             sheet.properties.SetFloat("_GhostSpread", settings.ghostSpread.value);
             sheet.properties.SetColor("_GhostColor", settings.ghostColor.value);
-            sheet.properties.SetFloat("_Dispersion", settings.dispersion.value);
             sheet.properties.SetFloat("_SpikeIntensity", settings.spikeIntensity.value);
             sheet.properties.SetInt("_SpikeCount", settings.spikeCount.value);
             sheet.properties.SetFloat("_SpikeLength", settings.spikeLength.value);
-            sheet.properties.SetFloat("_Threshold", settings.threshold.value);
 
             int width = context.width / 2;
             int height = context.height / 2;
+            int hStreak = Mathf.Max(1, context.height / 4);
+
             int rtThresh = Shader.PropertyToID("_FlareThreshold");
-            int rtStreak = Shader.PropertyToID("_FlareStreakTex");
+            int rtStreakCore = Shader.PropertyToID("_FlareStreakCore");
+            int rtStreakPing = Shader.PropertyToID("_FlareStreakPing");
+            int rtStreakPong = Shader.PropertyToID("_FlareStreakPong");
             int rtSpikes = Shader.PropertyToID("_FlareSpikesTex");
             int rtGhosts = Shader.PropertyToID("_FlareGhostTex");
 
             var cmd = context.command;
             cmd.GetTemporaryRT(rtThresh, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
-            cmd.GetTemporaryRT(rtStreak, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
+            cmd.GetTemporaryRT(rtStreakCore, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
+            cmd.GetTemporaryRT(rtStreakPing, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
+            cmd.GetTemporaryRT(rtStreakPong, width, hStreak, 0, FilterMode.Bilinear, context.sourceFormat);
             cmd.GetTemporaryRT(rtSpikes, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
             cmd.GetTemporaryRT(rtGhosts, width, height, 0, FilterMode.Bilinear, context.sourceFormat);
 
-            // Pass 0: Threshold Extraction
+            // Pass 0: Soft-Knee Threshold Extraction & Anti-Blowout Clamp
             cmd.BlitFullscreenTriangle(context.source, rtThresh, sheet, 0);
 
-            // Pass 1: Horizontal Streak with Spectral Dispersion
-            cmd.BlitFullscreenTriangle(rtThresh, rtStreak, sheet, 1);
+            // Pass 1: Horizontal Streak Pre-filter with Spectral Dispersion (creates brilliant tight core)
+            cmd.BlitFullscreenTriangle(rtThresh, rtStreakCore, sheet, 1);
 
-            // Pass 2: Diffraction Spikes (Starburst)
-            cmd.BlitFullscreenTriangle(rtThresh, rtSpikes, sheet, 2);
+            // Pass 2: Cascaded Ping-Pong Horizontal Gaussian Convolution (creates ultra-wide continuous streak)
+            float sLen = Mathf.Max(0.5f, settings.streakLength.value);
+            sheet.properties.SetFloat("_BlurStep", 3.0f * sLen);
+            cmd.BlitFullscreenTriangle(rtStreakCore, rtStreakPing, sheet, 2);
 
-            // Pass 3: Lens Ghosts & Optical Halo
-            cmd.BlitFullscreenTriangle(rtThresh, rtGhosts, sheet, 3);
+            sheet.properties.SetFloat("_BlurStep", 10.0f * sLen);
+            cmd.BlitFullscreenTriangle(rtStreakPing, rtStreakPong, sheet, 2);
 
-            // Pass 4: Composite with Scene
-            cmd.SetGlobalTexture("_FlareStreakTex", rtStreak);
+            sheet.properties.SetFloat("_BlurStep", 32.0f * sLen);
+            cmd.BlitFullscreenTriangle(rtStreakPong, rtStreakPing, sheet, 2);
+
+            sheet.properties.SetFloat("_BlurStep", 90.0f * sLen);
+            cmd.BlitFullscreenTriangle(rtStreakPing, rtStreakPong, sheet, 2);
+
+            // Pass 3: Diffraction Spikes (Continuous Starburst with IGN jitter)
+            cmd.BlitFullscreenTriangle(rtThresh, rtSpikes, sheet, 3);
+
+            // Pass 4: Lens Ghosts (Aperture Bokeh Defocus with 8-Tap Fibonacci Disk)
+            cmd.BlitFullscreenTriangle(rtThresh, rtGhosts, sheet, 4);
+
+            // Pass 5: Composite with Scene
+            cmd.SetGlobalTexture("_FlareStreakTex", rtStreakCore);
+            cmd.SetGlobalTexture("_FlareStreakWideTex", rtStreakPong);
             cmd.SetGlobalTexture("_FlareSpikesTex", rtSpikes);
             cmd.SetGlobalTexture("_FlareGhostTex", rtGhosts);
-            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 4);
+            cmd.BlitFullscreenTriangle(context.source, context.destination, sheet, 5);
 
             cmd.ReleaseTemporaryRT(rtThresh);
-            cmd.ReleaseTemporaryRT(rtStreak);
+            cmd.ReleaseTemporaryRT(rtStreakCore);
+            cmd.ReleaseTemporaryRT(rtStreakPing);
+            cmd.ReleaseTemporaryRT(rtStreakPong);
             cmd.ReleaseTemporaryRT(rtSpikes);
             cmd.ReleaseTemporaryRT(rtGhosts);
         }
