@@ -4,8 +4,9 @@ Shader "Hidden/TUFX/ModernTonemapping"
         #include "Packages/com.unity.postprocessing/PostProcessing/Shaders/StdLib.hlsl"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
-        int _Mode; // 0: AgX, 1: Tony McMapface, 2: Filmic
+        int _Mode; // 0: AgX (Film Punchy), 1: ACES (Cinematic), 2: Tony McMapface (Neutral), 3: Filmic
         float _Exposure;
+        float _Contrast;
         float _Saturation;
 
         // --- AgX Implementation ---
@@ -53,7 +54,22 @@ Shader "Hidden/TUFX/ModernTonemapping"
 
             // Apply Outset
             color = mul(AgX_Outset, color);
+
+            // Convert to display transfer curve (sRGB gamma ~2.2) to prevent flat raw-LOG wash
+            color = pow(saturate(color), 1.0 / 2.2);
+
             return saturate(color);
+        }
+
+        // --- ACES Filmic Tone Mapping (Narkowicz Fit) ---
+        float3 EvaluateACES(float3 x)
+        {
+            float a = 2.51;
+            float b = 0.03;
+            float c = 2.43;
+            float d = 0.59;
+            float e = 0.14;
+            return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
         }
 
         // --- Tony McMapface Implementation ---
@@ -84,12 +100,19 @@ Shader "Hidden/TUFX/ModernTonemapping"
             }
             else if (_Mode == 1)
             {
+                ldr = EvaluateACES(hdr);
+            }
+            else if (_Mode == 2)
+            {
                 ldr = EvaluateTonyMcMapface(hdr);
             }
             else
             {
                 ldr = EvaluateFilmic(hdr);
             }
+
+            // Contrast adjustment with 0.18 middle-gray pivot
+            ldr = saturate((ldr - 0.18) * _Contrast + 0.18);
 
             // Saturation adjustment
             float luma = dot(ldr, float3(0.2126, 0.7152, 0.0722));

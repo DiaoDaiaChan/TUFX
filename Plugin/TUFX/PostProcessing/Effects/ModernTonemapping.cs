@@ -5,8 +5,9 @@ namespace UnityEngine.Rendering.PostProcessing
     public enum ModernTonemapper
     {
         AgX = 0,
-        TonyMcMapface = 1,
-        Filmic = 2
+        ACES = 1,
+        TonyMcMapface = 2,
+        Filmic = 3
     }
 
     [Serializable]
@@ -16,11 +17,14 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(ModernTonemappingRenderer), PostProcessEvent.AfterStack, "TUFX/Modern Tonemapping")]
     public sealed class ModernTonemapping : PostProcessEffectSettings
     {
-        [Tooltip("Modern Tonemapper algorithm: AgX, Tony McMapface, or Filmic.")]
-        public ModernTonemapperParameter tonemapper = new ModernTonemapperParameter { value = ModernTonemapper.AgX };
+        [Tooltip("Modern Tonemapper algorithm: AgX, ACES (Cinematic Punch), Tony McMapface, or Filmic.")]
+        public ModernTonemapperParameter tonemapper = new ModernTonemapperParameter { value = ModernTonemapper.ACES };
 
         [Range(0.01f, 10f), Tooltip("Pre-exposure adjustment multiplier.")]
         public FloatParameter exposure = new FloatParameter { value = 1.0f };
+
+        [Range(0.5f, 2.5f), Tooltip("Contrast S-curve multiplier around middle gray.")]
+        public FloatParameter contrast = new FloatParameter { value = 1.15f };
 
         [Range(0f, 2f), Tooltip("Post-tonemap saturation multiplier.")]
         public FloatParameter saturation = new FloatParameter { value = 1.0f };
@@ -34,6 +38,7 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             loadEnumParameter(config, "Tonemapper", tonemapper, typeof(ModernTonemapper));
             loadFloatParameter(config, "Exposure", exposure);
+            loadFloatParameter(config, "Contrast", contrast);
             loadFloatParameter(config, "Saturation", saturation);
         }
 
@@ -41,6 +46,7 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             saveEnumParameter(config, "Tonemapper", tonemapper);
             saveFloatParameter(config, "Exposure", exposure);
+            saveFloatParameter(config, "Contrast", contrast);
             saveFloatParameter(config, "Saturation", saturation);
         }
     }
@@ -57,6 +63,7 @@ namespace UnityEngine.Rendering.PostProcessing
             var sheet = context.propertySheets.Get(shader);
             sheet.properties.SetInt("_Mode", (int)settings.tonemapper.value);
             sheet.properties.SetFloat("_Exposure", settings.exposure.value);
+            sheet.properties.SetFloat("_Contrast", settings.contrast.value);
             sheet.properties.SetFloat("_Saturation", settings.saturation.value);
 
             context.command.BlitFullscreenTriangle(context.source, context.destination, sheet, 0);

@@ -48,6 +48,7 @@ namespace TUFX
         {
             SelectProfile,
             EditProfile,
+            ExtendFX,
             SelectTexture,
             EditSpline,
         }
@@ -87,91 +88,94 @@ namespace TUFX
             var currentProfile = TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile;
             var allProfilers = TexturesUnlimitedFXLoader.INSTANCE.Profiles;
 
-			GUILayout.BeginHorizontal();
-			GUILayout.Label("Mode: ", GUILayout.Width(100));
-			GUIMode selectionMode = this.selectionMode;
-			if (selectionMode == GUIMode.SelectProfile)
-			{
-				GUILayout.Label("Selection", GUILayout.Width(100));
-				if (GUILayout.Button("Change to Edit Mode"))
-				{
-					this.selectionMode = GUIMode.EditProfile;
-				}
-			}
-			else if (selectionMode == GUIMode.EditProfile)
-			{
-				GUILayout.Label("Edit", GUILayout.Width(100));
-				if (GUILayout.Button("Change to Select Mode", GUILayout.Width(200)))
-				{
-					this.selectionMode = GUIMode.SelectProfile;
-				}
-			}
-			else //texture or spline edit modes
-			{
-				GUILayout.Label("Parameter", GUILayout.Width(100));
-				if (GUILayout.Button("Return to Edit Mode", GUILayout.Width(200)))
-				{
-					this.selectionMode = GUIMode.EditProfile;
-					this.textures.Clear();
-					this.effect = this.property = this.texture = string.Empty;
-					textureUpdateCallback = null;
-				}
-			}
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Mode: ", GUILayout.Width(50));
+            GUIMode currentMode = this.selectionMode;
+
+            if (GUILayout.Toggle(currentMode == GUIMode.SelectProfile, "Profiles", GUI.skin.button, GUILayout.Width(80)))
+            {
+                this.selectionMode = GUIMode.SelectProfile;
+            }
+            if (GUILayout.Toggle(currentMode == GUIMode.EditProfile, "Stock FX", GUI.skin.button, GUILayout.Width(80)))
+            {
+                this.selectionMode = GUIMode.EditProfile;
+            }
+            Color prevColor = GUI.color;
+            GUI.color = new Color(0.3f, 0.9f, 1.0f);
+            if (GUILayout.Toggle(currentMode == GUIMode.ExtendFX, "ExtendFX ★", GUI.skin.button, GUILayout.Width(100)))
+            {
+                this.selectionMode = GUIMode.ExtendFX;
+            }
+            GUI.color = prevColor;
+
+            if (currentMode > GUIMode.ExtendFX)
+            {
+                if (GUILayout.Button("Return", GUILayout.Width(65)))
+                {
+                    this.selectionMode = GUIMode.ExtendFX;
+                    this.textures.Clear();
+                    this.effect = this.property = this.texture = string.Empty;
+                    textureUpdateCallback = null;
+                }
+            }
 
             // save current / reload current
-            if (selectionMode <= GUIMode.EditProfile && currentProfile != null)
+            if (currentMode <= GUIMode.ExtendFX && currentProfile != null)
             {
-                if (GUILayout.Button("Save Selected"))
+                if (GUILayout.Button("Save Selected", GUILayout.Width(100)))
                 {
                     currentProfile.SaveToDisk();
                     ScreenMessages.PostScreenMessage("<color=orange>Saved selected profile to cfg</color>", 5f, ScreenMessageStyle.UPPER_LEFT);
                 }
-                if (GUILayout.Button("Reload Selected"))
+                if (GUILayout.Button("Reload Selected", GUILayout.Width(105)))
                 {
                     currentProfile.ReloadFromNode();
                     TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
 
-            if (selectionMode == GUIMode.SelectProfile)
+            if (currentMode == GUIMode.SelectProfile)
             {
-                if (GUILayout.Button("Save All"))
+                if (GUILayout.Button("Save All", GUILayout.Width(75)))
                 {
-					foreach (var profile in allProfilers.Values)
-					{
-						profile.SaveToDisk();
-					}
+                    foreach (var profile in allProfilers.Values)
+                    {
+                        profile.SaveToDisk();
+                    }
                     ScreenMessages.PostScreenMessage("<color=orange>Saved all profiles to cfg files</color>", 5f, ScreenMessageStyle.UPPER_LEFT);
                 }
-                if (GUILayout.Button("Reload All"))
+                if (GUILayout.Button("Reload All", GUILayout.Width(85)))
                 {
                     foreach (var profile in allProfilers.Values)
                     {
                         profile.ReloadFromNode();
                     }
-					TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
-				}
+                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
+                }
             }
 
-			if (GUILayout.Button("Close Window"))
-			{
-				TexturesUnlimitedFXLoader.INSTANCE.CloseConfigGui();
-			}
-			GUILayout.EndHorizontal();
+            if (GUILayout.Button("Close", GUILayout.Width(60)))
+            {
+                TexturesUnlimitedFXLoader.INSTANCE.CloseConfigGui();
+            }
+            GUILayout.EndHorizontal();
+        }
 
-		}
-
-		private void updateWindow(int id)
+        private void updateWindow(int id)
         {
             DrawHeader();
 
-            if (selectionMode == 0)
+            if (selectionMode == GUIMode.SelectProfile)
             {
                 renderSelectionWindow();
             }
             else if (selectionMode == GUIMode.EditProfile)
             {
                 renderConfigurationWindow();
+            }
+            else if (selectionMode == GUIMode.ExtendFX)
+            {
+                renderExtendFXWindow();
             }
             else if (selectionMode == GUIMode.SelectTexture)
             {
@@ -209,9 +213,6 @@ namespace TUFX
 
         private void renderConfigurationWindow()
         {
-            //if no profile is selected, disable the edit mode
-            //there are cases where there can be no active profile if the default profiles were removed or edited out of the persistence data
-            //should generally not occur, but just in case...
             if (TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile == null)
             {
                 GUILayout.BeginHorizontal();
@@ -219,30 +220,98 @@ namespace TUFX
                 GUILayout.EndHorizontal();
                 return;
             }
+
+            GUILayout.BeginHorizontal(HighLogic.Skin.box);
+            GUILayout.Label("<b>Stock TUFX Post-Processing Effects</b>");
+            GUILayout.FlexibleSpace();
+            Color prev = GUI.color;
+            GUI.color = new Color(0.3f, 0.9f, 1.0f);
+            if (GUILayout.Button("Open ExtendFX Suite (FSR, AgX/ACES, GTAO, SSR) >>", GUILayout.Width(350)))
+            {
+                this.selectionMode = GUIMode.ExtendFX;
+            }
+            GUI.color = prev;
+            GUILayout.EndHorizontal();
+
             editScrollPos = GUILayout.BeginScrollView(editScrollPos, false, true, (GUILayoutOption[])null);
             renderGeneralSettings();
             renderAmbientOcclusionSettings();
-            renderGTAOSettings();
-            renderContactShadowsSettings();
             renderAutoExposureSettings();
             renderBloomSettings();
-            renderHalationSettings();
-            renderAnamorphicFlareSettings();
-            renderGodRaysSettings();
             renderChromaticAberrationSettings();
             renderColorGradingSettings();
-            renderModernTonemappingSettings();
             renderDepthOfFieldSettings();
-            renderSpectralBokehSettings();
             renderGrainSettings();
             renderLensDistortionSettings();
             renderMotionBlurSettings();
-            renderScreenSpaceReflectionsSettings();
-            renderHeatDistortionSettings();
             renderScatteringSettings();
             renderVignetteSettings();
-            renderCASSettings();
             GUILayout.EndScrollView();
+        }
+
+        private Vector2 extendScrollPos = new Vector2();
+
+        private void renderExtendFXWindow()
+        {
+            if (TexturesUnlimitedFXLoader.INSTANCE.CurrentProfile == null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("No Profile Selected!");
+                GUILayout.EndHorizontal();
+                return;
+            }
+
+            GUILayout.BeginHorizontal(HighLogic.Skin.box);
+            GUILayout.Label("<color=#55CCFF><b>[ExtendFX] Next-Gen Advanced Visual Effects & Upgrades</b></color>");
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("<< Switch to Stock FX", GUILayout.Width(170)))
+            {
+                this.selectionMode = GUIMode.EditProfile;
+            }
+            GUILayout.EndHorizontal();
+
+            extendScrollPos = GUILayout.BeginScrollView(extendScrollPos, false, true, (GUILayoutOption[])null);
+
+            // 1. AMD FidelityFX FSR 1.0 / CAS
+            renderCASSettings();
+
+            // 2. Modern Tonemapping (AgX / ACES / Tony / Filmic)
+            renderModernTonemappingSettings();
+
+            // 3. Ground Truth Ambient Occlusion (GTAO)
+            renderGTAOSettings();
+
+            // 4. Screen Space Contact Shadows
+            renderContactShadowsSettings();
+
+            // 5. Screen Space Reflections (SSR)
+            renderScreenSpaceReflectionsSettings();
+
+            // 6. Film Halation
+            renderHalationSettings();
+
+            // 7. Anamorphic Lens Flare & Starburst
+            renderAnamorphicFlareSettings();
+
+            // 8. Spectral Bokeh (Chromatic Depth of Field)
+            renderSpectralBokehSettings();
+
+            // 9. Hypersonic Reentry Heat Haze
+            renderHeatDistortionSettings();
+
+            // 10. Dynamic Flight Context Adaptation Toggle
+            renderDynamicContextSettings();
+
+            GUILayout.EndScrollView();
+        }
+
+        private void renderDynamicContextSettings()
+        {
+            GUILayout.BeginVertical(HighLogic.Skin.box);
+            GUILayout.Label("<b>Dynamic Flight Context Adaptation</b>");
+            TUFXDynamicContextManager.Enabled = GUILayout.Toggle(TUFXDynamicContextManager.Enabled, "Enable Real-time Environment Adaptation (Reentry Heat Haze & EVA Mode)");
+            GUILayout.Label("<size=10><color=grey>Smoothly controls heat distortion during hypersonic reentry (Mach > 3) and astronaut visor curvature.</color></size>");
+            GUILayout.EndVertical();
         }
 
         private void renderTextureSelectWindow()
@@ -560,22 +629,25 @@ namespace TUFX
 
         private void renderCASSettings()
         {
-            bool showProps = AddEffectHeader("Contrast Adaptive Sharpening (CAS)", out ContrastAdaptiveSharpening cas);
+            bool showProps = AddEffectHeader("AMD FidelityFX FSR 1.0 / CAS (Contrast Adaptive Sharpening)", out ContrastAdaptiveSharpening cas);
             if (showProps)
             {
                 AddFloatParameter("Sharpness", cas.sharpness, 0f, 1f);
+                GUILayout.Label("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening algorithm (RCAS) to restore micro-details.</color></size>");
             }
             GUILayout.EndVertical();
         }
 
         private void renderModernTonemappingSettings()
         {
-            bool showProps = AddEffectHeader("Modern Tonemapping (AgX / Tony / Filmic)", out ModernTonemapping mt);
+            bool showProps = AddEffectHeader("Modern Tonemapping (AgX / ACES / Tony / Filmic)", out ModernTonemapping mt);
             if (showProps)
             {
                 AddEnumParameter("Tonemapper", mt.tonemapper);
                 AddFloatParameter("Exposure", mt.exposure, 0.05f, 5f);
+                AddFloatParameter("Contrast", mt.contrast, 0.5f, 2.5f);
                 AddFloatParameter("Saturation", mt.saturation, 0f, 2f);
+                GUILayout.Label("<size=10><color=grey>ACES provides punchy cinematic contrast and deep space blacks. AgX provides smooth highlight roll-off.</color></size>");
             }
             GUILayout.EndVertical();
         }

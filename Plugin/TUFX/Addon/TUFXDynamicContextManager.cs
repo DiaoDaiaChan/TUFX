@@ -12,6 +12,7 @@ namespace TUFX
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class TUFXDynamicContextManager : MonoBehaviour
     {
+        public static bool Enabled = true;
         private static TUFXDynamicContextManager INSTANCE;
 
         private float currentHeatDistortion = 0f;
@@ -30,6 +31,7 @@ namespace TUFX
 
         public void Update()
         {
+            if (!Enabled) return;
             if (HighLogic.LoadedScene != GameScenes.FLIGHT) return;
             var vessel = FlightGlobals.ActiveVessel;
             if (vessel == null) return;
