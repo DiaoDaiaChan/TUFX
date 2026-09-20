@@ -188,8 +188,10 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Intensity", settings.intensity.value * spaceFactor);
             sheet.properties.SetColor("_RayColor", settings.rayColor.value);
 
-            int width = context.width / 2;
-            int height = context.height / 2;
+            // Full resolution up to 1440p (2560x1440) for 1:1 pixel-perfect truss lattice, struts, and antennas;
+            // 2x downsampled for 4K+ to maintain peak performance.
+            int width = (context.width <= 2560) ? context.width : (context.width / 2);
+            int height = (context.height <= 1440) ? context.height : (context.height / 2);
             int rtExtract = Shader.PropertyToID("_GodRaysExtract");
             int rtRadial = Shader.PropertyToID("_GodRaysRadial");
 
