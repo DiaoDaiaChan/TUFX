@@ -1122,12 +1122,12 @@ namespace TUFX
             bool showProps = AddEffectHeader("Camera Motion Blur (Physical Shutter)", out CameraMotionBlurEffect cmb);
             if (showProps)
             {
-                AddEnumParameter("Source", cmb.mode);
+                AddBoolParameter("Preserve Vessel Sharpness", cmb.isolateVessel);
                 AddFloatParameter("Shutter Angle", cmb.shutterAngle, 0f, 360f);
-                AddFloatParameter("Blur Multiplier", cmb.blurMultiplier, 0.5f, 5f);
-                AddIntParameter("Samples", cmb.sampleCount, 4, 16);
-                AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 10f, 128f);
-                GUILayout.Label("#LOC_TUFX_Desc_CameraMotionBlur".Localize("<size=10><color=grey>Analytical view-projection & GBuffer motion vectors. Blur Multiplier boosts high-speed atmospheric flight streaks and camera spin.</color></size>"));
+                AddFloatParameter("Blur Multiplier", cmb.blurMultiplier, 0.2f, 5f);
+                AddIntParameter("Samples", cmb.sampleCount, 4, 24);
+                AddFloatParameter("Max Blur Pixels", cmb.maxBlurPixels, 8f, 128f);
+                GUILayout.Label("#LOC_TUFX_Desc_CameraMotionBlur".Localize("<size=10><color=grey>Physical rotary shutter speed blur. Isolates tracked spacecraft while blurring high-speed terrain and camera spin.</color></size>"));
             }
             GUILayout.EndVertical();
         }
