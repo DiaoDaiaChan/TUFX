@@ -89,21 +89,38 @@
     <Reference Include="$(ReferencePath)\GameData\001_ToolbarControl\Plugins\ToolbarControl.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\Microsoft.ML.OnnxRuntime.dll">
+    <Reference Include="$(ProjectDir)Libs\Microsoft.ML.OnnxRuntime.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Memory.dll">
+    <Reference Include="$(ProjectDir)Libs\System.Memory.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Buffers.dll">
+    <Reference Include="$(ProjectDir)Libs\System.Buffers.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Numerics.Vectors.dll">
+    <Reference Include="$(ProjectDir)Libs\System.Numerics.Vectors.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Runtime.CompilerServices.Unsafe.dll">
+    <Reference Include="$(ProjectDir)Libs\System.Runtime.CompilerServices.Unsafe.dll">
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Libs\Microsoft.ML.OnnxRuntime.dll">
+      <LogicalName>Microsoft.ML.OnnxRuntime.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Libs\System.Memory.dll">
+      <LogicalName>System.Memory.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Libs\System.Buffers.dll">
+      <LogicalName>System.Buffers.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Libs\System.Numerics.Vectors.dll">
+      <LogicalName>System.Numerics.Vectors.dll</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Libs\System.Runtime.CompilerServices.Unsafe.dll">
+      <LogicalName>System.Runtime.CompilerServices.Unsafe.dll</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Addon\TexturesUnlimitedFXLoader.cs" />

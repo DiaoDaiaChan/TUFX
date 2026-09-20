@@ -50,12 +50,17 @@ namespace TUFX.MaterialPipeline
             {
                 string rootDir = Path.GetFullPath(KSPUtil.ApplicationRootPath);
                 string pluginsDir = Path.GetFullPath(Path.Combine(rootDir, "GameData/TUFX/Plugins"));
+                string nativeDir = Path.GetFullPath(Path.Combine(rootDir, "GameData/TUFX/Native"));
 
                 string rootDml = Path.Combine(rootDir, "DirectML.dll");
                 string rootOrt = Path.Combine(rootDir, "onnxruntime.dll");
 
-                string nativeDml = Path.Combine(pluginsDir, "DirectML.native");
-                string nativeOrt = Path.Combine(pluginsDir, "onnxruntime.native");
+                string nativeDml = File.Exists(Path.Combine(nativeDir, "DirectML.native"))
+                    ? Path.Combine(nativeDir, "DirectML.native")
+                    : Path.Combine(pluginsDir, "DirectML.native");
+                string nativeOrt = File.Exists(Path.Combine(nativeDir, "onnxruntime.native"))
+                    ? Path.Combine(nativeDir, "onnxruntime.native")
+                    : Path.Combine(pluginsDir, "onnxruntime.native");
 
                 // Auto-deploy native C++ DLLs to KSP root directory on first run if needed
                 if (!File.Exists(rootDml) && File.Exists(nativeDml))
