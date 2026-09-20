@@ -3,10 +3,47 @@ using UnityEngine;
 
 namespace UnityEngine.Rendering.PostProcessing
 {
+    public enum AntiFlickerMotionSource
+    {
+        Auto = 0,
+        Deferred = 1,
+        CameraOnly = 2
+    }
+
+    public enum AntiFlickerHistoryFilter
+    {
+        BicubicCatmullRom5Tap = 0,
+        Bilinear = 1
+    }
+
+    public enum AntiFlickerClippingMode
+    {
+        KDOP18 = 0,
+        VarianceAABB = 1
+    }
+
+    [Serializable]
+    public sealed class AntiFlickerMotionSourceParameter : ParameterOverride<AntiFlickerMotionSource> { }
+
+    [Serializable]
+    public sealed class AntiFlickerHistoryFilterParameter : ParameterOverride<AntiFlickerHistoryFilter> { }
+
+    [Serializable]
+    public sealed class AntiFlickerClippingModeParameter : ParameterOverride<AntiFlickerClippingMode> { }
+
     [Serializable]
     [PostProcess(typeof(AntiFlickerRenderer), PostProcessEvent.BeforeStack, "TUFX/Temporal Anti-Flicker", sortingPriority: 75)]
     public sealed class AntiFlickerEffect : PostProcessEffectSettings
     {
+        [Tooltip("Motion vectors source: Auto (detects Deferred per-object vectors and falls back to camera matrix), Deferred (force per-pixel motion vectors), or CameraOnly (analytical camera matrix).")]
+        public AntiFlickerMotionSourceParameter motionSource = new AntiFlickerMotionSourceParameter { value = AntiFlickerMotionSource.Auto };
+
+        [Tooltip("History reconstruction filter: BicubicCatmullRom5Tap (5-tap bicubic Catmull-Rom for razor-sharp stability without blur accumulation) or Bilinear.")]
+        public AntiFlickerHistoryFilterParameter historyFilter = new AntiFlickerHistoryFilterParameter { value = AntiFlickerHistoryFilter.BicubicCatmullRom5Tap };
+
+        [Tooltip("Temporal clipping algorithm: KDOP18 (18-DOP convex polytope chamfering 12 diagonal half-spaces to eliminate fast-motion ghosting) or VarianceAABB (Brian Karis UE4/UE5 axis-aligned bounding box).")]
+        public AntiFlickerClippingModeParameter clippingMode = new AntiFlickerClippingModeParameter { value = AntiFlickerClippingMode.KDOP18 };
+
         [Range(0.50f, 0.98f), Tooltip("Temporal stability blending weight. Higher values increase temporal smoothing on subpixel details (Default: 0.85).")]
         public FloatParameter stability = new FloatParameter { value = 0.85f };
 
@@ -19,7 +56,7 @@ namespace UnityEngine.Rendering.PostProcessing
         [Tooltip("Preserve tracked spacecraft sharpness: locks camera tracking to the active vessel to maintain native sharpness on parts.")]
         public BoolParameter isolateVessel = new BoolParameter { value = true };
 
-        [Range(0, 2), Tooltip("Diagnostic visualization: 0 = Normal Output, 1 = Show Stabilized Variance Heatmap, 2 = Show Clamped History.")]
+        [Range(0, 3), Tooltip("Diagnostic visualization: 0 = Normal Output, 1 = Show Stabilized Variance Heatmap, 2 = Show Clamped History, 3 = Show Motion Vectors Buffer.")]
         public IntParameter debugMode = new IntParameter { value = 0 };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
@@ -29,6 +66,9 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Load(ConfigNode config)
         {
+            loadEnumParameter(config, "MotionSource", motionSource, typeof(AntiFlickerMotionSource));
+            loadEnumParameter(config, "HistoryFilter", historyFilter, typeof(AntiFlickerHistoryFilter));
+            loadEnumParameter(config, "ClippingMode", clippingMode, typeof(AntiFlickerClippingMode));
             loadFloatParameter(config, "Stability", stability);
             loadFloatParameter(config, "Sharpness", sharpness);
             loadBoolParameter(config, "AntiFirefly", antiFirefly);
@@ -38,6 +78,9 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override void Save(ConfigNode config)
         {
+            saveEnumParameter(config, "MotionSource", motionSource);
+            saveEnumParameter(config, "HistoryFilter", historyFilter);
+            saveEnumParameter(config, "ClippingMode", clippingMode);
             saveFloatParameter(config, "Stability", stability);
             saveFloatParameter(config, "Sharpness", sharpness);
             saveBoolParameter(config, "AntiFirefly", antiFirefly);
@@ -59,7 +102,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         public override DepthTextureMode GetCameraFlags()
         {
-            return DepthTextureMode.Depth;
+            return DepthTextureMode.Depth | DepthTextureMode.MotionVectors;
         }
 
         public override void Release()
@@ -173,6 +216,9 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_AntiFirefly", settings.antiFirefly.value ? 1.0f : 0.0f);
             sheet.properties.SetFloat("_ResetHistory", m_ResetHistory ? 1.0f : 0.0f);
             sheet.properties.SetInt("_DebugMode", settings.debugMode.value);
+            sheet.properties.SetInt("_MotionVectorSource", (int)settings.motionSource.value);
+            sheet.properties.SetInt("_HistoryFilter", (int)settings.historyFilter.value);
+            sheet.properties.SetInt("_ClippingMode", (int)settings.clippingMode.value);
             sheet.properties.SetTexture("_PrevColorTex", m_HistoryTextures[readIndex]);
 
             if (SystemInfo.supportedRenderTargetCount >= 2)

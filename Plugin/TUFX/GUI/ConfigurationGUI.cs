@@ -953,12 +953,15 @@ namespace TUFX
             bool showProps = AddEffectHeader("Temporal Anti-Flicker Filter (Brian Karis UE5)", out AntiFlickerEffect af);
             if (showProps)
             {
+                AddEnumParameter("Motion Vectors Source", af.motionSource);
+                AddEnumParameter("History Filter", af.historyFilter);
+                AddEnumParameter("Clipping Method", af.clippingMode);
                 AddFloatParameter("Temporal Stability", af.stability, 0.50f, 0.98f);
                 AddFloatParameter("Variance Sharpness", af.sharpness, 0.8f, 2.5f);
                 AddBoolParameter("Anti-Firefly Suppression", af.antiFirefly);
                 AddBoolParameter("Preserve Vessel Sharpness", af.isolateVessel);
-                AddIntParameter("Debug Mode (0=Off,1=Variance,2=Clamped)", af.debugMode, 0, 2);
-                GUILayout.Label("#LOC_TUFX_Desc_AntiFlicker".Localize("<size=10><color=grey>Industry-standard Brian Karis (UE5) YCoCg variance clipping & anti-firefly luma weighting. Eliminates high-frequency shimmering on trusses, wire antennas, and subpixel edges while keeping the spacecraft razor-sharp.</color></size>"));
+                AddIntParameter("Debug Mode (0=Off,1=Var,2=Hist,3=MV)", af.debugMode, 0, 3);
+                GUILayout.Label("#LOC_TUFX_Desc_AntiFlicker".Localize("<size=10><color=grey>Industry-standard Brian Karis (UE5) YCoCg variance clipping, 18-DOP polytope, 5-tap bicubic Catmull-Rom & Deferred motion vectors. Eliminates high-frequency shimmering on trusses, wire antennas, and subpixel edges.</color></size>"));
             }
             GUILayout.EndVertical();
         }
