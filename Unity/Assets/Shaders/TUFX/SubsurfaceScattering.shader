@@ -38,8 +38,8 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             float4 centerCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
 
             // Dynamic distance scaling: maintain visible, cinematic diffusion footprint across gameplay camera distances (1m to 350m+)
-            float depthFactor = max(1.0, centerDepth * 0.12);
-            float pixelRadius = clamp((_ScatterRadius * 6.5) / depthFactor, 2.0, 24.0);
+            float depthFactor = max(1.0, centerDepth * 0.15);
+            float pixelRadius = clamp((_ScatterRadius * 4.5) / depthFactor, 1.0, 18.0);
             float scale = pixelRadius * _MainTex_TexelSize.x;
 
             // Perspective-adaptive bilateral depth threshold (prevents tank curvature from collapsing weights at distance)
@@ -72,7 +72,7 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             return float4(blurred, centerCol.a);
         }
 
-        // Pass 1: Vertical Diffusion & Composite Pass (Distance-Gated)
+        // Pass 1: Vertical Diffusion & Composite Pass (Distance-Gated with High-Frequency Detail Preservation)
         float4 FragSSSSVertical(VaryingsDefault i) : SV_Target
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
@@ -92,8 +92,8 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             float4 centerCol = SAMPLE_TEXTURE2D(_SSSSIntermediate, sampler_MainTex, i.texcoord);
 
             // Dynamic distance scaling: maintain visible, cinematic diffusion footprint across gameplay camera distances (1m to 350m+)
-            float depthFactor = max(1.0, centerDepth * 0.12);
-            float pixelRadius = clamp((_ScatterRadius * 6.5) / depthFactor, 2.0, 24.0);
+            float depthFactor = max(1.0, centerDepth * 0.15);
+            float pixelRadius = clamp((_ScatterRadius * 4.5) / depthFactor, 1.0, 18.0);
             float scale = pixelRadius * _MainTex_TexelSize.y;
 
             // Perspective-adaptive bilateral depth threshold
@@ -124,6 +124,17 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
 
             float3 blurred = totalColor / max(0.0001, totalWeight);
 
+            // Luminance extraction
+            float origLuma = max(0.0001, dot(originalCol.rgb, float3(0.2126, 0.7152, 0.0722)));
+            float blurLuma = max(0.0001, dot(blurred.rgb, float3(0.2126, 0.7152, 0.0722)));
+
+            // High-frequency surface texture details (panel lines, rivets, text, decals, scratches)
+            // MUST NEVER be blurred away! This preserves 100% native resolution and sharpness.
+            float highFreqDetail = origLuma - blurLuma;
+
+            // Specular highlight protection: specular reflections are surface Fresnel, not subsurface
+            float specProtection = saturate((origLuma - blurLuma * 1.25) * 3.0);
+
             // Subsurface diffusion calculation
             float3 diff = blurred - originalCol.rgb;
 
@@ -136,16 +147,15 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
                 // On neutral metallic/white satellites (R ≈ G ≈ B), chroma is strictly (1,1,1) -> 0 orange shift!
                 // On Kerbals, chroma captures green subcutaneous glow.
                 // On icy or colored bodies, chroma adapts to the native hue.
-                float luma = max(0.001, dot(originalCol.rgb, float3(0.2126, 0.7152, 0.0722)));
-                float3 chroma = clamp(originalCol.rgb / luma, 0.3, 2.2);
+                float3 chroma = clamp(originalCol.rgb / origLuma, 0.3, 2.2);
 
                 float maxC = max(originalCol.r, max(originalCol.g, originalCol.b));
                 float minC = min(originalCol.r, min(originalCol.g, originalCol.b));
                 float sat = (maxC - minC) / max(0.01, maxC);
 
                 tintColor = lerp(float3(1.0, 1.0, 1.0), chroma, saturate(sat * 2.0));
-                // Allow rich diffusion across white/light surfaces (thermal blankets, matte hulls), slight taper on mirror metals
-                scatterMask = lerp(0.85, 1.0, saturate(sat * 2.0));
+                // Modulate scatter mask by saturation so organic/colored materials scatter strongly, while neutral metals scatter subtly
+                scatterMask = lerp(0.35, 1.0, saturate(sat * 2.0));
             }
             else
             {
@@ -153,16 +163,21 @@ Shader "Hidden/TUFX/SubsurfaceScattering"
             }
 
             // Subsurface diffusion:
-            // Light diffusing across the surface into shadows adopts the subsurface tint.
-            // When diff > 0 (light scattered into darker areas), multiply by tintColor.
-            // When diff < 0 (light scattered out of brighter areas), keep neutral to avoid inverted chromatic aberration.
+            // Light diffusing into shadowed areas (diff > 0) carries the subsurface tint.
+            // Bright areas do NOT lose their sharp illumination.
             float3 diffPositive = max(0.0, diff) * tintColor;
-            float3 diffNegative = min(0.0, diff);
-            float3 sssColor = originalCol.rgb + diffPositive + diffNegative;
+            float3 sssBleed = diffPositive * (1.0 - specProtection);
 
-            // Distance smooth fadeout to 0 when approaching _MaxDistance
+            // Add subsurface bleed to the original image
+            float3 combined = originalCol.rgb + sssBleed * (_Intensity * 1.5);
+
+            // Re-inject high-frequency surface detail so the texture resolution is 100% preserved
+            float combLuma = dot(combined, float3(0.2126, 0.7152, 0.0722));
+            float3 sharpSSS = combined * ((origLuma + highFreqDetail * 0.85) / max(0.001, combLuma));
+
+            // Smooth distance fadeout towards _MaxDistance
             float distFade = saturate((_MaxDistance - centerDepth) / max(1.0, _MaxDistance * 0.25));
-            float3 result = lerp(originalCol.rgb, sssColor, _Intensity * distFade * scatterMask);
+            float3 result = lerp(originalCol.rgb, sharpSSS, distFade * scatterMask);
             return float4(result, originalCol.a);
         }
     ENDHLSL
