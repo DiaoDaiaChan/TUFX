@@ -256,6 +256,9 @@ namespace TUFX
             Add("Green", "#LOC_TUFX_Param_Green");
             Add("Blue", "#LOC_TUFX_Param_Blue");
             Add("Alpha", "#LOC_TUFX_Param_Alpha");
+            Add("Temporal Super-Resolution", "#LOC_TUFX_Param_SuperResolution");
+            Add("Dual-Scale Super-Sampling", "#LOC_TUFX_Param_DualScale");
+            Add("Overdrive Boost (+0.0~1.5)", "#LOC_TUFX_Param_OverdriveBoost");
         }
 
         /// <summary>

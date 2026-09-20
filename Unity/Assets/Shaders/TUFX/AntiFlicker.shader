@@ -22,6 +22,7 @@ Shader "Hidden/TUFX/AntiFlicker"
         int _MotionVectorSource; // 0: Auto, 1: Deferred, 2: CameraOnly
         int _HistoryFilter;      // 0: BicubicCatmullRom5Tap, 1: Bilinear
         int _ClippingMode;       // 0: KDOP18, 1: VarianceAABB
+        float _SuperResolution;  // 0.0: Standard Anti-Flicker, 1.0: Temporal Super-Resolution
 
         // Color Space conversion: RGB <-> YCoCg
         float3 RGBToYCoCg(float3 c)
@@ -129,8 +130,9 @@ Shader "Hidden/TUFX/AntiFlicker"
             float4 c_left   = SAMPLE_TEXTURE2D_LOD(_PrevColorTex, sampler_PrevColorTex, float2(tc0.x,  tc12.y), 0);
             float4 c_right  = SAMPLE_TEXTURE2D_LOD(_PrevColorTex, sampler_PrevColorTex, float2(tc3.x,  tc12.y), 0);
 
-            float totalWeight = (w12.x * w12.y) + (w12.x * w0.y) + (w12.x * w3.y) + (w0.x * w12.y) + (w3.x * w12.y);
-            float3 result = (c_center.rgb * (w12.x * w12.y) +
+            float centerBoost = (_SuperResolution > 0.5) ? 1.25 : 1.0;
+            float totalWeight = (w12.x * w12.y * centerBoost) + (w12.x * w0.y) + (w12.x * w3.y) + (w0.x * w12.y) + (w3.x * w12.y);
+            float3 result = (c_center.rgb * (w12.x * w12.y * centerBoost) +
                              c_top.rgb    * (w12.x * w0.y) +
                              c_bottom.rgb * (w12.x * w3.y) +
                              c_left.rgb   * (w0.x * w12.y) +
@@ -310,6 +312,14 @@ Shader "Hidden/TUFX/AntiFlicker"
             else
             {
                 finalRGB = lerp(centerColor, clampedHistRGB, _Stability);
+            }
+
+            // Temporal Super-Resolution: reconstruct subpixel high-frequency details on stable tracking geometry
+            if (_SuperResolution > 0.5)
+            {
+                float velWeight = saturate(1.0 - length(pixelMotion * _MainTex_TexelSize.zw) * 0.5);
+                float3 subpixelDelta = clampedHistRGB - centerColor;
+                finalRGB = saturate(finalRGB + subpixelDelta * (0.15 * velWeight));
             }
 
             outHistory = float4(finalRGB, 1.0);

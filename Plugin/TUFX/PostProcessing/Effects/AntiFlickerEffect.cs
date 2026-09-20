@@ -56,6 +56,9 @@ namespace UnityEngine.Rendering.PostProcessing
         [Tooltip("Preserve tracked spacecraft sharpness: locks camera tracking to the active vessel to maintain native sharpness on parts.")]
         public BoolParameter isolateVessel = new BoolParameter { value = true };
 
+        [Tooltip("Temporal Super-Resolution: boosts Catmull-Rom subpixel high frequencies and adapts temporal integration to reconstruct 2x-equivalent geometric detail.")]
+        public BoolParameter superResolution = new BoolParameter { value = false };
+
         [Range(0, 3), Tooltip("Diagnostic visualization: 0 = Normal Output, 1 = Show Stabilized Variance Heatmap, 2 = Show Clamped History, 3 = Show Motion Vectors Buffer.")]
         public IntParameter debugMode = new IntParameter { value = 0 };
 
@@ -73,6 +76,7 @@ namespace UnityEngine.Rendering.PostProcessing
             loadFloatParameter(config, "Sharpness", sharpness);
             loadBoolParameter(config, "AntiFirefly", antiFirefly);
             loadBoolParameter(config, "IsolateVessel", isolateVessel);
+            loadBoolParameter(config, "SuperResolution", superResolution);
             loadIntParameter(config, "DebugMode", debugMode);
         }
 
@@ -85,6 +89,7 @@ namespace UnityEngine.Rendering.PostProcessing
             saveFloatParameter(config, "Sharpness", sharpness);
             saveBoolParameter(config, "AntiFirefly", antiFirefly);
             saveBoolParameter(config, "IsolateVessel", isolateVessel);
+            saveBoolParameter(config, "SuperResolution", superResolution);
             saveIntParameter(config, "DebugMode", debugMode);
         }
     }
@@ -214,6 +219,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Stability", settings.stability.value);
             sheet.properties.SetFloat("_VarianceSharpness", settings.sharpness.value);
             sheet.properties.SetFloat("_AntiFirefly", settings.antiFirefly.value ? 1.0f : 0.0f);
+            sheet.properties.SetFloat("_SuperResolution", settings.superResolution.value ? 1.0f : 0.0f);
             sheet.properties.SetFloat("_ResetHistory", m_ResetHistory ? 1.0f : 0.0f);
             sheet.properties.SetInt("_DebugMode", settings.debugMode.value);
             sheet.properties.SetInt("_MotionVectorSource", (int)settings.motionSource.value);

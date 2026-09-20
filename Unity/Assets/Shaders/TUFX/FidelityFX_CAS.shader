@@ -17,14 +17,16 @@ Shader "Hidden/TUFX/ContrastAdaptiveSharpening"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
         float4 _MainTex_TexelSize;
-        float _Sharpness; // 0.0 (off) to 1.0 (max)
+        float _Sharpness; // 0.0 (off) to 1.0 (max standard AMD CAS)
+        float _DualScale; // 0.0 (off) or 1.0 (Dual-Scale Super-Sampling active)
+        float _Overdrive; // 0.0 to 1.5 (additional overdrive boost)
 
-        // AMD FidelityFX CAS (Contrast Adaptive Sharpening) Implementation
+        // AMD FidelityFX CAS (Contrast Adaptive Sharpening) Implementation with Dual-Scale Super-Sampling
         float4 Frag(VaryingsDefault i) : SV_Target
         {
             float2 uv = i.texcoord;
 
-            // Fetch 3x3 cross neighborhood
+            // Fetch 3x3 cross neighborhood (Inner / Micro Scale)
             float3 a = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(-_MainTex_TexelSize.x, -_MainTex_TexelSize.y)).rgb;
             float3 b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(0.0, -_MainTex_TexelSize.y)).rgb;
             float3 c = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(_MainTex_TexelSize.x, -_MainTex_TexelSize.y)).rgb;
@@ -46,13 +48,41 @@ Shader "Hidden/TUFX/ContrastAdaptiveSharpening"
             mxR = mxR + mxR2;
 
             // Smooth minimum distance to limit
-            float3 ampR = saturate(min(mnR, 2.0 - mxR) / mxR);
+            float3 ampR = saturate(min(mnR, 2.0 - mxR) / max(mxR, 1e-4));
             
-            // Shaping amount
-            float3 wR = sqrt(ampR) * (-0.125 * _Sharpness);
+            // Shaping amount (Standard AMD CAS)
+            float3 wR = sqrt(ampR) * (-0.125 * saturate(_Sharpness));
 
-            // Filter weight sum
-            float3 result = (b * wR + d * wR + f * wR + h * wR + e) / (1.0 + 4.0 * wR);
+            // Safe denominator to prevent division by zero
+            float3 denom = max(float3(0.05, 0.05, 0.05), 1.0 + 4.0 * wR);
+
+            // Filter weight sum (Standard AMD CAS result)
+            float3 result = (b * wR + d * wR + f * wR + h * wR + e) / denom;
+
+            // Dual-Scale Super-Sampling & Overdrive Branch
+            if (_DualScale > 0.5 && _Overdrive > 0.001)
+            {
+                float2 wideStep = _MainTex_TexelSize.xy * 1.75;
+
+                // Outer structural taps for macro geometric features (trusses, seams, panel frames)
+                float3 ob = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(0.0, -wideStep.y)).rgb;
+                float3 od = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(-wideStep.x, 0.0)).rgb;
+                float3 of = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2( wideStep.x, 0.0)).rgb;
+                float3 oh = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + float2(0.0,  wideStep.y)).rgb;
+
+                float3 outerCross = (ob + od + of + oh) * 0.25;
+                float3 macroDiff = e - outerCross;
+
+                // Edge-preserving contrast gating: avoid boosting noise/sky/fog
+                float localLumaDiff = abs(dot(macroDiff, float3(0.2126, 0.7152, 0.0722)));
+                float edgeGate = saturate(localLumaDiff * 6.0);
+
+                // Add macro structural boost
+                float3 boosted = result + macroDiff * (_Overdrive * 0.45 * edgeGate);
+
+                // Anti-ringing clamp: keep within local 3x3 min/max envelope to avoid black/white halo artifacts
+                result = clamp(boosted, mnR2 * 0.96, mxR2 * 1.04);
+            }
 
             return float4(saturate(result), 1.0);
         }

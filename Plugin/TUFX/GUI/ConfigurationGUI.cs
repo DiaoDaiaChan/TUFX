@@ -960,6 +960,7 @@ namespace TUFX
                 AddFloatParameter("Variance Sharpness", af.sharpness, 0.8f, 2.5f);
                 AddBoolParameter("Anti-Firefly Suppression", af.antiFirefly);
                 AddBoolParameter("Preserve Vessel Sharpness", af.isolateVessel);
+                AddBoolParameter("Temporal Super-Resolution", af.superResolution);
                 AddIntParameter("Debug Mode (0=Off,1=Var,2=Hist,3=MV)", af.debugMode, 0, 3);
                 GUILayout.Label("#LOC_TUFX_Desc_AntiFlicker".Localize("<size=10><color=grey>Industry-standard Brian Karis (UE5) YCoCg variance clipping, 18-DOP polytope, 5-tap bicubic Catmull-Rom & Deferred motion vectors. Eliminates high-frequency shimmering on trusses, wire antennas, and subpixel edges.</color></size>"));
             }
@@ -984,6 +985,11 @@ namespace TUFX
             if (showProps)
             {
                 AddFloatParameter("Sharpness", cas.sharpness, 0f, 1f);
+                AddBoolParameter("Dual-Scale Super-Sampling", cas.dualScale);
+                if (cas.dualScale.value)
+                {
+                    AddFloatParameter("Overdrive Boost (+0.0~1.5)", cas.overdrive, 0f, 1.5f);
+                }
                 GUILayout.Label("#LOC_TUFX_Desc_CAS".Localize("<size=10><color=grey>AMD FidelityFX edge-directed dynamic sharpening (RCAS). Combine with CMAA 2 / SMAA / TAA above for crystal-clear antialiased visuals!</color></size>"));
             }
             GUILayout.EndVertical();
