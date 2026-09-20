@@ -87,6 +87,7 @@ namespace TUFX
             INSTANCE = this;
             DontDestroyOnLoad(this);
             detectDeferredPipeline();
+            TUFX.MaterialPipeline.MaterialPipelineManager.EnsureInstance(gameObject);
             GameEvents.onLevelWasLoaded.Add(new EventData<GameScenes>.OnEvent(onLevelLoaded));
             GameEvents.OnCameraChange.Add(new EventData<CameraManager.CameraMode>.OnEvent(cameraChange));
 

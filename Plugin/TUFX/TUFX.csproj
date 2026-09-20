@@ -176,6 +176,10 @@
     <Compile Include="Utils.cs" />
     <Compile Include="Localization\TUFXLocalizer.cs" />
     <Compile Include="Performance\TUFXProfiler.cs" />
+    <Compile Include="MaterialPipeline\DebugTextureStamper.cs" />
+    <Compile Include="MaterialPipeline\MaterialPipelineManager.cs" />
+    <Compile Include="MaterialPipeline\MaterialTextureRegistry.cs" />
+    <Compile Include="MaterialPipeline\VesselMaterialTracker.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="PostProcessing\Unity.Postprocessing.Runtime.asmdef" />

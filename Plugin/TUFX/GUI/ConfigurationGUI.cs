@@ -468,6 +468,9 @@ namespace TUFX
             // 13. Screen Space Subsurface Scattering (SSSS Translucent Glow)
             renderSubsurfaceScatteringSettings();
 
+            // 14. Vessel Material Pipeline & AI Super-Resolution Hook (Debug Hook)
+            renderMaterialPipelineSettings();
+
             GUILayout.EndScrollView();
         }
 
@@ -1239,6 +1242,83 @@ namespace TUFX
                     AddColorParameter("Subsurface Tint", ssss.subsurfaceColor);
                 }
                 GUILayout.Label("#LOC_TUFX_Desc_SSSS".Localize("<size=10><color=grey>Separable screen-space subsurface scattering for organic Kerbal skin/EVA translucency. Auto Adapt dynamically matches scattering to surface albedo chrominance, keeping metallic spacecraft clean and neutral while giving Kerbals a rich green subcutaneous glow.</color></size>"));
+            }
+            GUILayout.EndVertical();
+        }
+
+        private bool showMaterialPipeline = true;
+
+        private void renderMaterialPipelineSettings()
+        {
+            GUILayout.BeginVertical(HighLogic.Skin.box);
+            GUILayout.BeginHorizontal();
+            showMaterialPipeline = GUILayout.Toggle(showMaterialPipeline, "<color=#55FFAA><b>[Material Pipeline] 飞船材质流式重构与 AI 超分底座 (Debug Hook)</b></color>", GUILayout.ExpandWidth(true));
+            GUILayout.EndHorizontal();
+
+            if (showMaterialPipeline)
+            {
+                var mgr = TUFX.MaterialPipeline.MaterialPipelineManager.Instance;
+                if (mgr != null)
+                {
+                    // Scan / Status Info Box
+                    GUILayout.BeginVertical(HighLogic.Skin.box);
+                    Vessel v = FlightGlobals.ActiveVessel;
+                    string vesselName = v != null ? v.vesselName : "None (No Active Vessel)";
+                    GUILayout.Label("<b>当前飞船 (Active Vessel):</b> " + vesselName);
+
+                    var lastScan = mgr.Tracker != null ? mgr.Tracker.LastScan : null;
+                    if (lastScan != null && lastScan.ScannedVessel == v)
+                    {
+                        GUILayout.Label(string.Format("扫描统计: 部件数: <b>{0}</b> | 材质数: <b>{1}</b> | 唯一贴图: <b>{2}</b>",
+                            lastScan.PartCount, lastScan.MaterialCount, lastScan.UniqueTextureCount));
+                    }
+                    else
+                    {
+                        GUILayout.Label("扫描统计: 点击下方按钮立即重新扫描当前飞船");
+                    }
+
+                    GUILayout.Label(string.Format("已 Hook 贴图数: <b>{0}</b> | 状态: <color=#FFFF55>{1}</color>",
+                        mgr.Registry != null ? mgr.Registry.OverrideCount : 0, mgr.StatusMessage));
+
+                    if (mgr.IsProcessing)
+                    {
+                        float progress = mgr.TotalProgress > 0 ? (float)mgr.CurrentProgress / mgr.TotalProgress : 0f;
+                        GUILayout.HorizontalSlider(progress, 0f, 1f);
+                    }
+                    GUILayout.EndVertical();
+
+                    // Control Buttons & Sliders
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("渐进替换间隔 (秒):", GUILayout.Width(130));
+                    mgr.ProgressiveDelay = GUILayout.HorizontalSlider(mgr.ProgressiveDelay, 0.02f, 0.50f);
+                    GUILayout.Label(mgr.ProgressiveDelay.ToString("F2") + "s", GUILayout.Width(45));
+                    GUILayout.EndHorizontal();
+
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("重新扫描飞船 (Rescan)"))
+                    {
+                        mgr.RescanActiveVessel();
+                    }
+
+                    GUI.enabled = !mgr.IsProcessing;
+                    if (GUILayout.Button("<color=#FFFF00><b>启动逐部件打标 (Simulate AI Upscale)</b></color>"))
+                    {
+                        mgr.StartProgressiveDebugStamp();
+                    }
+                    GUI.enabled = true;
+
+                    if (GUILayout.Button("一键还原原始贴图 (Restore)"))
+                    {
+                        mgr.RestoreOriginalTextures();
+                    }
+                    GUILayout.EndHorizontal();
+
+                    GUILayout.Label("<size=10><color=grey>材质流式重构底座：在 GPU 显存内安全拦截当前飞船各部件材质，打上黄色粗体 DEBUG 水印并以协程逐个热替换，精准验证运行时资产劫持、贴图热更新与未来 AI 超分管道可行性。</color></size>");
+                }
+                else
+                {
+                    GUILayout.Label("MaterialPipelineManager 未初始化。");
+                }
             }
             GUILayout.EndVertical();
         }

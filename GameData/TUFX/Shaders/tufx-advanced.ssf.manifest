@@ -1,9 +1,9 @@
 ManifestFileVersion: 0
-CRC: 1774279985
+CRC: 4177634155
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: f8cc2c7d6fd2737e966a2867638bd2b2
+    Hash: 48f47847bf394f5750aa2986ac7fad95
   TypeTreeHash:
     serializedVersion: 2
     Hash: 55d48f4ad9c3b13330b9eb5ee5686477
@@ -27,6 +27,7 @@ Assets:
 - Assets/Shaders/TUFX/GroundTruthAO.shader
 - Assets/Shaders/TUFX/FidelityFX_EASU.shader
 - Assets/Shaders/TUFX/GodRays.shader
+- Assets/Shaders/TUFX/DebugTextureStamper.shader
 - Assets/Shaders/TUFX/CMAA2.shader
 - Assets/Shaders/TUFX/Bloom.shader
 - Assets/Shaders/TUFX/SpectralBokeh.shader
