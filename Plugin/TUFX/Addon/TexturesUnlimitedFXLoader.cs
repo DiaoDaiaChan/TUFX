@@ -43,7 +43,7 @@ namespace TUFX
             [Persistent] public string EditorSceneProfile = "Default-Editor";
             [Persistent] public string FlightSceneProfile = "Default-Flight";
             [Persistent] public string MapSceneProfile = "Default-Tracking";
-            [Persistent] public string IVAProfile = "Default-Flight";
+            [Persistent] public string IVAProfile = "Default-Internal";
             [Persistent] public string TrackingStationProfile = "Default-Tracking";
             [Persistent] public bool ShowToolbarButton = true;
         }
@@ -619,6 +619,14 @@ namespace TUFX
 
             mainVolume.sharedProfile = currentProfile.CreatePostProcessProfile();
 
+            Camera galaxyCamera = ScaledCamera.Instance?.galaxyCamera;
+            if (galaxyCamera != null)
+            {
+                var layer = galaxyCamera.gameObject.AddOrGetComponent<PostProcessLayer>();
+                layer.Init(Resources);
+                galaxyCamera.allowHDR = currentProfile.HDREnabled;
+            }
+
 			if (HighLogic.LoadedScene == GameScenes.MAINMENU || HighLogic.LoadedScene == GameScenes.SPACECENTER)
 			{
 				ApplyProfileToCamera(Camera.main, currentProfile, true, true);
@@ -668,7 +676,7 @@ namespace TUFX
         {
             if (configGUI == null)
             {
-                configGUI = this.gameObject.AddOrGetComponent<ConfigurationGUI>();
+                configGUI = new GameObject("TUFX Config GUI").AddComponent<ConfigurationGUI>();
             }
         }
 
@@ -679,7 +687,7 @@ namespace TUFX
         {
             if (configGUI != null)
             {
-			    GameObject.Destroy(configGUI);
+			    GameObject.Destroy(configGUI.gameObject);
 			    configGUI = null;
 		    }
         }

@@ -221,14 +221,26 @@ namespace TUFX
             return node;
         }
 
+        const string PROFILE_NODE_NAME = "TUFX_PROFILE";
+
         public bool SaveToDisk()
         {
             try
             {
-                urlConfig.config = SaveToNode();
-				urlConfig.parent.SaveConfigs();
-                return true;
-			}
+                // reload the file because it might have MM patches etc in there that we don't want to lose.
+                UrlDir.UrlFile newFile = new UrlDir.UrlFile(urlConfig.parent.parent, new System.IO.FileInfo(urlConfig.parent.fullPath));
+
+                for (int i = 0; i < newFile.configs.Count; ++i)
+                {
+                    if (newFile.configs[i].type == PROFILE_NODE_NAME && newFile.configs[i].name == ProfileName)
+                    {
+                        newFile.configs[i].config = SaveToNode();
+                        newFile.SaveConfigs();
+                        urlConfig = newFile.configs[i];
+                        return true;
+                    }
+                }
+            }
             catch (Exception e)
             {
                 Debug.LogException(e);

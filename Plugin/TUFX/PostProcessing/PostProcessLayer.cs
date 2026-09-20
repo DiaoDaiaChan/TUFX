@@ -592,8 +592,8 @@ namespace UnityEngine.Rendering.PostProcessing
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 ao.RenderAmbientOnly(context);
 
-                // Composite with GBuffer right before the lighting pass
-                context.command = m_LegacyCmdBufferBeforeLighting;
+                // Composite with GBuffer before reflections pass which Deferred uses for ambient
+                context.command = m_LegacyCmdBufferBeforeReflections;
                 ao.CompositeAmbientOnly(context);
                 long t1 = System.Diagnostics.Stopwatch.GetTimestamp();
                 TUFX.Performance.TUFXProfiler.RecordSample("AmbientOcclusion", (float)((t1 - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency));

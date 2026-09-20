@@ -1,4 +1,5 @@
 using ClickThroughFix;
+using KSP.UI;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -62,21 +63,53 @@ namespace TUFX
             windowID = GetInstanceID();
             profileNames.Clear();
             profileNames.AddRange(TexturesUnlimitedFXLoader.INSTANCE.Profiles.Keys);
+
+            gameObject.layer = 5;
+            gameObject.AddComponent<RectTransform>();
+
+            var canvasRenderer = gameObject.AddComponent<CanvasRenderer>();
+            canvasRenderer.cullTransparentMesh = true;
+            var image = gameObject.AddComponent<UnityEngine.UI.Image>();
+            image.color = new Color(0, 0, 0, 0);
+            image.raycastTarget = true;
+
+            if (MainCanvasUtil.MainCanvas != null)
+            {
+                gameObject.transform.SetParent(MainCanvasUtil.MainCanvas.transform, false);
+            }
+
+            var rectTransform = transform as RectTransform;
+            if (rectTransform != null)
+            {
+                rectTransform.anchorMin = new Vector2(0, 0);
+                rectTransform.anchorMax = new Vector2(0, 0);
+                rectTransform.pivot = new Vector2(0, 0);
+            }
         }
 
         public void OnGUI()
         {
             try
             {
-                string title = "TUFX: Beyond";
-                try
+                if (UIMasterController.Instance == null || UIMasterController.Instance.IsUIShowing)
                 {
-                    title = title.Localize();
+                    string title = "TUFX: Beyond";
+                    try
+                    {
+                        title = title.Localize();
+                    }
+                    catch
+                    {
+                    }
+                    windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, title);
+
+                    var rectTransform = transform as RectTransform;
+                    if (rectTransform != null)
+                    {
+                        rectTransform.anchoredPosition = new Vector2(windowRect.x, Screen.height - windowRect.y - windowRect.height);
+                        rectTransform.sizeDelta = new Vector2(windowRect.width, windowRect.height);
+                    }
                 }
-                catch
-                {
-                }
-                windowRect = ClickThruBlocker.GUIWindow(windowID, windowRect, updateWindow, title);
             }
             catch (Exception e)
             {
@@ -862,47 +895,12 @@ namespace TUFX
             if (profile.AntiAliasing == PostProcessLayer.Antialiasing.TemporalAntialiasing)
             {
                 GUILayout.BeginVertical(HighLogic.Skin.box);
-                GUILayout.Label("<b>Enhanced TAA Parameters:</b> <color=grey>(Lower blending reduces black vessel ghosting)</color>");
+                GUILayout.Label("<b>Enhanced TAA Parameters:</b> <color=grey>(Supports keyboard typing with decimals and slider)</color>");
                 
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"Stationary Blending: {profile.TAAStationaryBlending:F2}", GUILayout.Width(180));
-                float newStat = GUILayout.HorizontalSlider(profile.TAAStationaryBlending, 0.50f, 0.98f);
-                if (Math.Abs(newStat - profile.TAAStationaryBlending) > 0.001f)
-                {
-                    profile.TAAStationaryBlending = newStat;
-                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
-                }
-                GUILayout.EndHorizontal();
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"Motion Blending: {profile.TAAMotionBlending:F2}", GUILayout.Width(180));
-                float newMot = GUILayout.HorizontalSlider(profile.TAAMotionBlending, 0.30f, 0.95f);
-                if (Math.Abs(newMot - profile.TAAMotionBlending) > 0.001f)
-                {
-                    profile.TAAMotionBlending = newMot;
-                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
-                }
-                GUILayout.EndHorizontal();
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"Jitter Spread: {profile.TAAJitterSpread:F2}", GUILayout.Width(180));
-                float newJit = GUILayout.HorizontalSlider(profile.TAAJitterSpread, 0.10f, 1.0f);
-                if (Math.Abs(newJit - profile.TAAJitterSpread) > 0.001f)
-                {
-                    profile.TAAJitterSpread = newJit;
-                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
-                }
-                GUILayout.EndHorizontal();
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"TAA Sharpness: {profile.TAASharpness:F2}", GUILayout.Width(180));
-                float newSharp = GUILayout.HorizontalSlider(profile.TAASharpness, 0f, 1.0f);
-                if (Math.Abs(newSharp - profile.TAASharpness) > 0.001f)
-                {
-                    profile.TAASharpness = newSharp;
-                    TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
-                }
-                GUILayout.EndHorizontal();
+                AddFloatField("Stationary Blending", ref profile.TAAStationaryBlending, 0.50f, 0.98f, () => TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras());
+                AddFloatField("Motion Blending", ref profile.TAAMotionBlending, 0.30f, 0.95f, () => TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras());
+                AddFloatField("Jitter Spread", ref profile.TAAJitterSpread, 0.10f, 1.0f, () => TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras());
+                AddFloatField("TAA Sharpness", ref profile.TAASharpness, 0f, 1.0f, () => TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras());
                 GUILayout.EndVertical();
             }
             else if (profile.AntiAliasing == PostProcessLayer.Antialiasing.SubpixelMorphologicalAntialiasing)
@@ -1551,6 +1549,41 @@ namespace TUFX
                     TexturesUnlimitedFXLoader.INSTANCE.RefreshCameras();
                 }
             }
+            GUILayout.EndHorizontal();
+        }
+
+        private void AddFloatField(string label, ref float value, float min, float max, Action onChange = null)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(label, GUILayout.Width(180), GUILayout.Height(22));
+
+            if (propertyStringStorage.ContainsKey(label))
+            {
+                string oldValue = propertyStringStorage[label];
+                string newValue = GUILayout.TextArea(oldValue, GUILayout.Width(60));
+                if (newValue != oldValue)
+                {
+                    propertyStringStorage[label] = newValue;
+                    if (float.TryParse(newValue, out float v))
+                    {
+                        value = v;
+                        onChange?.Invoke();
+                    }
+                }
+            }
+            else
+            {
+                propertyStringStorage.Add(label, value.ToString("F2"));
+            }
+
+            float sliderVal = GUILayout.HorizontalSlider(value, min, max, GUILayout.Width(250));
+            if (Math.Abs(sliderVal - value) > 0.0005f)
+            {
+                value = sliderVal;
+                propertyStringStorage[label] = value.ToString("F2");
+                onChange?.Invoke();
+            }
+
             GUILayout.EndHorizontal();
         }
 

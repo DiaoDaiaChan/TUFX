@@ -77,6 +77,12 @@
     <Reference Include="$(ManagedPath)\UnityEngine.VRModule.dll">
       <Private>false</Private>
     </Reference>
+    <Reference Include="$(ManagedPath)\UnityEngine.UI.dll">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(ManagedPath)\UnityEngine.UIModule.dll">
+      <Private>false</Private>
+    </Reference>
     <Reference Include="$(ReferencePath)\GameData\000_ClickThroughBlocker\Plugins\ClickThroughBlocker.dll">
       <Private>false</Private>
     </Reference>
