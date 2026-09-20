@@ -48,16 +48,58 @@ namespace TUFX.MaterialPipeline
 
             try
             {
-                string pluginsDir = Path.GetFullPath(Path.Combine(KSPUtil.ApplicationRootPath, "GameData/TUFX/Plugins"));
-                if (Directory.Exists(pluginsDir))
-                {
-                    SetDllDirectory(pluginsDir);
-                    string dmlPath = Path.Combine(pluginsDir, "DirectML.dll");
-                    string ortPath = Path.Combine(pluginsDir, "onnxruntime.dll");
+                string rootDir = Path.GetFullPath(KSPUtil.ApplicationRootPath);
+                string pluginsDir = Path.GetFullPath(Path.Combine(rootDir, "GameData/TUFX/Plugins"));
 
-                    if (File.Exists(dmlPath)) LoadLibrary(dmlPath);
-                    if (File.Exists(ortPath)) LoadLibrary(ortPath);
+                string rootDml = Path.Combine(rootDir, "DirectML.dll");
+                string rootOrt = Path.Combine(rootDir, "onnxruntime.dll");
+
+                string nativeDml = Path.Combine(pluginsDir, "DirectML.native");
+                string nativeOrt = Path.Combine(pluginsDir, "onnxruntime.native");
+
+                // Auto-deploy native C++ DLLs to KSP root directory on first run if needed
+                if (!File.Exists(rootDml) && File.Exists(nativeDml))
+                {
+                    try
+                    {
+                        File.Copy(nativeDml, rootDml, true);
+                        Debug.Log("[TUFX DirectML] Deployed DirectML.dll to KSP root directory.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("[TUFX DirectML] Failed to copy DirectML.native to root: " + ex.Message);
+                    }
                 }
+
+                if (!File.Exists(rootOrt) && File.Exists(nativeOrt))
+                {
+                    try
+                    {
+                        File.Copy(nativeOrt, rootOrt, true);
+                        Debug.Log("[TUFX DirectML] Deployed onnxruntime.dll to KSP root directory.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("[TUFX DirectML] Failed to copy onnxruntime.native to root: " + ex.Message);
+                    }
+                }
+
+                SetDllDirectory(rootDir);
+
+                string dmlPath = File.Exists(rootDml) ? rootDml : (File.Exists(Path.Combine(pluginsDir, "DirectML.dll")) ? Path.Combine(pluginsDir, "DirectML.dll") : null);
+                string ortPath = File.Exists(rootOrt) ? rootOrt : (File.Exists(Path.Combine(pluginsDir, "onnxruntime.dll")) ? Path.Combine(pluginsDir, "onnxruntime.dll") : null);
+
+                if (dmlPath != null)
+                {
+                    IntPtr hDml = LoadLibrary(dmlPath);
+                    Debug.Log("[TUFX DirectML] LoadLibrary DirectML: " + (hDml != IntPtr.Zero ? "Success" : "Failed (code " + Marshal.GetLastWin32Error() + ")"));
+                }
+                if (ortPath != null)
+                {
+                    IntPtr hOrt = LoadLibrary(ortPath);
+                    Debug.Log("[TUFX DirectML] LoadLibrary onnxruntime: " + (hOrt != IntPtr.Zero ? "Success" : "Failed (code " + Marshal.GetLastWin32Error() + ")"));
+                }
+
                 s_NativeDllsLoaded = true;
             }
             catch (Exception ex)
