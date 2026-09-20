@@ -8,13 +8,13 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class Halation : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Halation intensity.")]
-        public FloatParameter intensity = new FloatParameter { value = 1.0f };
+        public FloatParameter intensity = new FloatParameter { value = 0.35f };
 
-        [Range(0.1f, 5f), Tooltip("Luminance threshold above which halation triggers.")]
-        public FloatParameter threshold = new FloatParameter { value = 1.2f };
+        [Range(0.1f, 10f), Tooltip("Luminance threshold above which halation triggers.")]
+        public FloatParameter threshold = new FloatParameter { value = 2.5f };
 
         [Range(0.5f, 5f), Tooltip("Halation glow radius / blur spread.")]
-        public FloatParameter radius = new FloatParameter { value = 2.0f };
+        public FloatParameter radius = new FloatParameter { value = 1.8f };
 
         [Tooltip("Color tint of the halation diffusion (warm red/orange CineStill 800T style).")]
         public ColorParameter colorTint = new ColorParameter { value = new Color(1.0f, 0.36f, 0.12f, 1.0f) };

@@ -23,8 +23,8 @@ Shader "Hidden/TUFX/Halation"
             float4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float luma = dot(color.rgb, float3(0.2126, 0.7152, 0.0722));
 
-            // Soft-knee threshold to prevent harsh cutoffs
-            float knee = max(0.1, _Threshold * 0.4);
+            // Soft-knee threshold to prevent harsh cutoffs while protecting daytime diffuse hulls
+            float knee = max(0.1, _Threshold * 0.25);
             float minThresh = max(0.0, _Threshold - knee);
             float factor = 0.0;
             if (luma > minThresh)
@@ -62,6 +62,9 @@ Shader "Hidden/TUFX/Halation"
 
             // CineStill 800T characteristic: sharp red boundary glow + broad warm halo
             float3 halation = (tightGlow * 0.6 + wideBleed * 0.4) * (_Intensity * _ColorTint.rgb);
+            // Highlight tone compression to prevent nuclear blowout on extreme bright sources
+            float halationLuma = dot(halation, float3(0.2126, 0.7152, 0.0722));
+            halation = halation / (1.0 + 0.35 * halationLuma);
             return float4(scene.rgb + halation, scene.a);
         }
     ENDHLSL

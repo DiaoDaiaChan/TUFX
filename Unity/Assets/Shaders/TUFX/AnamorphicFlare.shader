@@ -209,12 +209,15 @@ Shader "Hidden/TUFX/AnamorphicFlare"
             // White-hot core transitioning into vivid cinematic electric cyan-blue tails
             float streakLuma = dot(streak, float3(0.2126, 0.7152, 0.0722));
             float3 streakTint = lerp(_StreakColor.rgb, float3(1.0, 1.0, 1.0), saturate(streakLuma * 0.45));
-            float3 coloredStreak = streak * streakTint * (_StreakIntensity * 2.5);
+            float3 coloredStreak = streak * streakTint * _StreakIntensity;
 
             float3 spikes = SAMPLE_TEXTURE2D(_FlareSpikesTex, sampler_MainTex, i.texcoord).rgb;
             float3 ghosts = SAMPLE_TEXTURE2D(_FlareGhostTex, sampler_MainTex, i.texcoord).rgb;
 
             float3 finalFlare = coloredStreak + spikes + ghosts;
+            // Soft highlight compression prevents blinding blowout and harsh white clamping
+            float flareLuma = dot(finalFlare, float3(0.2126, 0.7152, 0.0722));
+            finalFlare = finalFlare / (1.0 + 0.30 * flareLuma);
             return float4(orig.rgb + finalFlare, orig.a);
         }
 

@@ -7,7 +7,7 @@ namespace UnityEngine.Rendering.PostProcessing
     public sealed class AnamorphicFlare : PostProcessEffectSettings
     {
         [Range(0f, 5f), Tooltip("Horizontal anamorphic streak intensity.")]
-        public FloatParameter streakIntensity = new FloatParameter { value = 1.2f };
+        public FloatParameter streakIntensity = new FloatParameter { value = 0.45f };
 
         [Range(0.5f, 15f), Tooltip("Streak horizontal spread length.")]
         public FloatParameter streakLength = new FloatParameter { value = 3.5f };
@@ -16,7 +16,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public ColorParameter streakColor = new ColorParameter { value = new Color(0.25f, 0.7f, 1.0f, 1.0f) };
 
         [Range(0f, 3f), Tooltip("Lens ghosting & halo intensity.")]
-        public FloatParameter ghostIntensity = new FloatParameter { value = 0.8f };
+        public FloatParameter ghostIntensity = new FloatParameter { value = 0.0f };
 
         [Range(0.2f, 2.0f), Tooltip("Lens ghost spread factor.")]
         public FloatParameter ghostSpread = new FloatParameter { value = 1.0f };
@@ -25,25 +25,25 @@ namespace UnityEngine.Rendering.PostProcessing
         public ColorParameter ghostColor = new ColorParameter { value = new Color(0.4f, 0.75f, 1.0f, 1.0f) };
 
         [Range(0f, 2f), Tooltip("Spectral dispersion on streaks and ghosts.")]
-        public FloatParameter dispersion = new FloatParameter { value = 0.6f };
+        public FloatParameter dispersion = new FloatParameter { value = 0.5f };
 
         [Range(0f, 5f), Tooltip("Diffraction spikes (starburst) intensity.")]
-        public FloatParameter spikeIntensity = new FloatParameter { value = 0.8f };
+        public FloatParameter spikeIntensity = new FloatParameter { value = 0.15f };
 
         [Range(4, 8), Tooltip("Number of diffraction spikes (4, 6, or 8).")]
         public IntParameter spikeCount = new IntParameter { value = 6 };
 
         [Range(0.5f, 10f), Tooltip("Diffraction spike length.")]
-        public FloatParameter spikeLength = new FloatParameter { value = 3.0f };
+        public FloatParameter spikeLength = new FloatParameter { value = 2.5f };
 
         [Range(0.5f, 15f), Tooltip("Luminance threshold.")]
-        public FloatParameter threshold = new FloatParameter { value = 1.30f };
+        public FloatParameter threshold = new FloatParameter { value = 2.8f };
 
         [Range(0f, 1f), Tooltip("Soft threshold knee to prevent hard specular clipping.")]
-        public FloatParameter softKnee = new FloatParameter { value = 0.15f };
+        public FloatParameter softKnee = new FloatParameter { value = 0.40f };
 
         [Range(5f, 50f), Tooltip("Maximum brightness clamp to prevent specular blowout on metallic surfaces.")]
-        public FloatParameter maxBrightness = new FloatParameter { value = 25.0f };
+        public FloatParameter maxBrightness = new FloatParameter { value = 12.0f };
 
         [Tooltip("Enable cinematic widescreen letterbox black bars on top and bottom.")]
         public BoolParameter letterbox = new BoolParameter { value = false };
