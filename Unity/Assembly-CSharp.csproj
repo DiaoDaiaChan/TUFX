@@ -145,6 +145,7 @@
      <None Include="Assets\BrunetonsImprovedAtmosphere\Shaders\IrradianceFunctions.cginc" />
      <None Include="Assets\StockShaders\Emissive.shader" />
      <None Include="Assets\StockShaders\ParticleAdd.shader" />
+     <None Include="Assets\Shaders\TUFX\AntiFlicker.shader" />
      <None Include="Assets\TUWater\Shaders\TUShadowMap.shader" />
      <None Include="Assets\StockShaders\Specular.shader" />
      <None Include="Assets\StockShaders\BumpedSpecularCutoff.shader" />

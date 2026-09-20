@@ -1,9 +1,9 @@
 ManifestFileVersion: 0
-CRC: 630979675
+CRC: 1882969704
 Hashes:
   AssetFileHash:
     serializedVersion: 2
-    Hash: e49fa1d79a2e5bf5f4b782d87be990a6
+    Hash: b53df7b1878aa128af9fe79f45fd73ab
   TypeTreeHash:
     serializedVersion: 2
     Hash: 55d48f4ad9c3b13330b9eb5ee5686477
@@ -16,6 +16,7 @@ Assets:
 - Assets/Shaders/TUFX/CameraMotionBlur.shader
 - Assets/Shaders/TUFX/ScreenSpaceReflections.shader
 - Assets/Shaders/TUFX/ExposureMetering.shader
+- Assets/Shaders/TUFX/AntiFlicker.shader
 - Assets/Shaders/TUFX/ModernTonemapping.shader
 - Assets/Shaders/TUFX/AnamorphicFlare.shader
 - Assets/Shaders/TUFX/ProceduralFilmGrain.shader

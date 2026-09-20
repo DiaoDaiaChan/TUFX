@@ -41,7 +41,8 @@ namespace TUFX
         CameraMotionBlur,
         FSRUpscaler,
         SSGI,
-        SubsurfaceScattering
+        SubsurfaceScattering,
+        AntiFlicker
     }
 
     public class TUFXProfileManager
@@ -103,6 +104,8 @@ namespace TUFX
                     return ScriptableObject.CreateInstance<SSGIEffect>();
                 case BuiltinEffect.SubsurfaceScattering:
                     return ScriptableObject.CreateInstance<SubsurfaceScatteringEffect>();
+                case BuiltinEffect.AntiFlicker:
+                    return ScriptableObject.CreateInstance<AntiFlickerEffect>();
                 default:
                     break;
             }
@@ -137,6 +140,7 @@ namespace TUFX
             else if (settings is EASUUpscaler) { return BuiltinEffect.FSRUpscaler; }
             else if (settings is SSGIEffect) { return BuiltinEffect.SSGI; }
             else if (settings is SubsurfaceScatteringEffect) { return BuiltinEffect.SubsurfaceScattering; }
+            else if (settings is AntiFlickerEffect) { return BuiltinEffect.AntiFlicker; }
             return BuiltinEffect.AmbientOcclusion;
         }
 

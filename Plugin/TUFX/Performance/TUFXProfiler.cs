@@ -100,6 +100,7 @@ namespace TUFX.Performance
             Register("HeatDistortionEffect", "Hypersonic Reentry Heat Distortion", "#LOC_TUFX_Effect_HeatDistortion", PipelineStage.BeforeStack, 50);
             Register("AnamorphicFlare", "Anamorphic Lens Flare & Starburst", "#LOC_TUFX_Effect_AnamorphicFlare", PipelineStage.BeforeStack, 60);
             Register("Halation", "35mm Analog Film Halation", "#LOC_TUFX_Effect_Halation", PipelineStage.BeforeStack, 70);
+            Register("AntiFlickerEffect", "Temporal Anti-Flicker Filter", "#LOC_TUFX_Effect_AntiFlicker", PipelineStage.BeforeStack, 75);
 
             // 3. Builtin Stack Stage (Ordered by execution inside RenderBuiltins)
             Register("DepthOfField", "Depth of Field (Optical Bokeh)", "#LOC_TUFX_Effect_DepthOfField", PipelineStage.BuiltinStack, 80);

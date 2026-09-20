@@ -425,6 +425,9 @@ namespace TUFX
             // 1. Intel CMAA 2 (Conservative Morphological Anti-Aliasing)
             renderCMAA2Settings();
 
+            // 1.5 Temporal Anti-Flicker Filter (Brian Karis UE5)
+            renderAntiFlickerSettings();
+
             // 2. AMD FidelityFX FSR 1.0 / EASU Reconstruction & CAS
             renderFSRUpscalerSettings();
             renderCASSettings();
@@ -941,6 +944,21 @@ namespace TUFX
                 AddIntParameter("Max Search Length", cmaa.maxSearchLength, 8, 86);
                 AddIntParameter("Debug Mode (0=Off,1=Edge,2=Weight)", cmaa.debugMode, 0, 2);
                 GUILayout.Label("#LOC_TUFX_Desc_CMAA2".Localize("<size=10><color=grey>Intel's state-of-the-art morphological AA algorithm. Extremely sharp edge smoothing without temporal ghosting or blur.</color></size>"));
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void renderAntiFlickerSettings()
+        {
+            bool showProps = AddEffectHeader("Temporal Anti-Flicker Filter (Brian Karis UE5)", out AntiFlickerEffect af);
+            if (showProps)
+            {
+                AddFloatParameter("Temporal Stability", af.stability, 0.50f, 0.98f);
+                AddFloatParameter("Variance Sharpness", af.sharpness, 0.8f, 2.5f);
+                AddBoolParameter("Anti-Firefly Suppression", af.antiFirefly);
+                AddBoolParameter("Preserve Vessel Sharpness", af.isolateVessel);
+                AddIntParameter("Debug Mode (0=Off,1=Variance,2=Clamped)", af.debugMode, 0, 2);
+                GUILayout.Label("#LOC_TUFX_Desc_AntiFlicker".Localize("<size=10><color=grey>Industry-standard Brian Karis (UE5) YCoCg variance clipping & anti-firefly luma weighting. Eliminates high-frequency shimmering on trusses, wire antennas, and subpixel edges while keeping the spacecraft razor-sharp.</color></size>"));
             }
             GUILayout.EndVertical();
         }
