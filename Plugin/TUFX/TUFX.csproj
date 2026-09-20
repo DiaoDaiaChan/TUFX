@@ -89,21 +89,6 @@
     <Reference Include="$(ReferencePath)\GameData\001_ToolbarControl\Plugins\ToolbarControl.dll">
       <Private>false</Private>
     </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\Microsoft.ML.OnnxRuntime.dll">
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Memory.dll">
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Buffers.dll">
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Numerics.Vectors.dll">
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="$(SolutionDir)\..\GameData\TUFX\Plugins\System.Runtime.CompilerServices.Unsafe.dll">
-      <Private>false</Private>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Addon\TexturesUnlimitedFXLoader.cs" />
