@@ -402,3 +402,4 @@ FodyWeavers.xsd
 unity_build.log
 GameData/TUFX/Shaders/Shaders
 GameData/TUFX/Shaders/Shaders.manifest
+Tools/Publish/

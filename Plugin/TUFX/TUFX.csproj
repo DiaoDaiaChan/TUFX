@@ -83,6 +83,9 @@
     <Reference Include="$(ManagedPath)\UnityEngine.UIModule.dll">
       <Private>false</Private>
     </Reference>
+    <Reference Include="$(ManagedPath)\UnityEngine.ImageConversionModule.dll">
+      <Private>false</Private>
+    </Reference>
     <Reference Include="$(ReferencePath)\GameData\000_ClickThroughBlocker\Plugins\ClickThroughBlocker.dll">
       <Private>false</Private>
     </Reference>

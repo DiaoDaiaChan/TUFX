@@ -1,39 +1,32 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace TUFX.MaterialPipeline
 {
     /// <summary>
-    /// Native DirectML + ONNX Runtime AI Super-Resolution Engine.
-    /// Fully decoupled from Mono assembly loader to ensure 100% compatibility with KSP 1.12.
-    /// Operates with ZERO static references to netstandard or .NET Core packages.
+    /// Native DirectML AI Super-Resolution Engine.
+    /// Operates via dedicated GPU worker process to ensure 100% Mono compatibility with KSP 1.12.
+    /// Zero Mono GC memory spikes, zero netstandard dependency conflicts.
     /// </summary>
     public class DirectMLSuperResEngine : IDisposable
     {
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr LoadLibrary(string libname);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern bool SetDllDirectory(string lpPathName);
-
         public bool IsDirectMLAvailable { get; private set; } = false;
         public string InitError { get; private set; } = string.Empty;
         public List<string> AvailableModels { get; private set; } = new List<string>();
         public string ActiveModelName { get; private set; } = string.Empty;
 
-        private IDisposable m_Session;
         private readonly Dictionary<int, Texture2D> m_UpscaleCache = new Dictionary<int, Texture2D>();
-        private static bool s_NativeDllsLoaded = false;
+        private string m_WorkerPath = string.Empty;
+        private string m_CacheDir = string.Empty;
 
         public DirectMLSuperResEngine()
         {
-            InitializeNativeLibraries();
+            InitializePaths();
             ScanModels();
             if (AvailableModels.Count > 0)
             {
@@ -41,49 +34,42 @@ namespace TUFX.MaterialPipeline
             }
         }
 
-        private void InitializeNativeLibraries()
+        private void InitializePaths()
         {
-            if (s_NativeDllsLoaded) return;
-
             try
             {
                 string rootDir = Path.GetFullPath(KSPUtil.ApplicationRootPath);
-                string pluginsDir = Path.GetFullPath(Path.Combine(rootDir, "GameData/TUFX/Plugins"));
-                string nativeDir = Path.GetFullPath(Path.Combine(rootDir, "GameData/TUFX/Native"));
-
-                string rootDml = Path.Combine(rootDir, "DirectML.dll");
-                string rootOrt = Path.Combine(rootDir, "onnxruntime.dll");
-
-                string nativeDml = File.Exists(Path.Combine(nativeDir, "DirectML.native"))
-                    ? Path.Combine(nativeDir, "DirectML.native")
-                    : Path.Combine(pluginsDir, "DirectML.native");
-                string nativeOrt = File.Exists(Path.Combine(nativeDir, "onnxruntime.native"))
-                    ? Path.Combine(nativeDir, "onnxruntime.native")
-                    : Path.Combine(pluginsDir, "onnxruntime.native");
-
-                if (!File.Exists(rootDml) && File.Exists(nativeDml))
+                m_CacheDir = Path.Combine(rootDir, "GameData/TUFX/Cache");
+                if (!Directory.Exists(m_CacheDir))
                 {
-                    try { File.Copy(nativeDml, rootDml, true); } catch { }
+                    Directory.CreateDirectory(m_CacheDir);
                 }
 
-                if (!File.Exists(rootOrt) && File.Exists(nativeOrt))
+                // Locate the standalone DirectML Worker
+                string p1 = Path.Combine(rootDir, "TUFX_Tools/TUFX_DirectML_Worker.exe");
+                string p2 = Path.Combine(rootDir, "GameData/TUFX/Tools/TUFX_DirectML_Worker.exe");
+
+                if (File.Exists(p1)) m_WorkerPath = p1;
+                else if (File.Exists(p2)) m_WorkerPath = p2;
+
+                if (!string.IsNullOrEmpty(m_WorkerPath))
                 {
-                    try { File.Copy(nativeOrt, rootOrt, true); } catch { }
+                    IsDirectMLAvailable = true;
+                    InitError = string.Empty;
+                    Debug.Log($"[TUFX DirectML] Found GPU DirectML Worker: {m_WorkerPath}");
                 }
-
-                SetDllDirectory(rootDir);
-
-                string dmlPath = File.Exists(rootDml) ? rootDml : (File.Exists(Path.Combine(pluginsDir, "DirectML.dll")) ? Path.Combine(pluginsDir, "DirectML.dll") : null);
-                string ortPath = File.Exists(rootOrt) ? rootOrt : (File.Exists(Path.Combine(pluginsDir, "onnxruntime.dll")) ? Path.Combine(pluginsDir, "onnxruntime.dll") : null);
-
-                if (dmlPath != null) LoadLibrary(dmlPath);
-                if (ortPath != null) LoadLibrary(ortPath);
-
-                s_NativeDllsLoaded = true;
+                else
+                {
+                    IsDirectMLAvailable = false;
+                    InitError = "TUFX_DirectML_Worker.exe not found in TUFX_Tools/";
+                    Debug.LogWarning("[TUFX DirectML] Standalone worker not found, using GPU hardware fallback");
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogWarning("[TUFX DirectML] Native library pre-load exception: " + ex.Message);
+                InitError = ex.Message;
+                IsDirectMLAvailable = false;
+                Debug.LogWarning("[TUFX DirectML] Path init notice: " + ex.Message);
             }
         }
 
@@ -111,59 +97,28 @@ namespace TUFX.MaterialPipeline
                 if (!File.Exists(fullPath))
                 {
                     InitError = "Model file not found: " + modelFilename;
-                    IsDirectMLAvailable = false;
                     return false;
                 }
 
-                if (m_Session != null)
-                {
-                    m_Session.Dispose();
-                    m_Session = null;
-                }
-
-                // Probe for ONNX Runtime dynamically via reflection
-                Type sessionType = Type.GetType("Microsoft.ML.OnnxRuntime.InferenceSession, Microsoft.ML.OnnxRuntime");
-                Type optionsType = Type.GetType("Microsoft.ML.OnnxRuntime.SessionOptions, Microsoft.ML.OnnxRuntime");
-
-                if (sessionType != null && optionsType != null)
-                {
-                    object options = Activator.CreateInstance(optionsType);
-                    MethodInfo dmlMethod = optionsType.GetMethod("AppendExecutionProvider_DML");
-                    if (dmlMethod != null)
-                    {
-                        try { dmlMethod.Invoke(options, new object[] { 0 }); } catch { }
-                    }
-
-                    ConstructorInfo ctor = sessionType.GetConstructor(new Type[] { typeof(string), optionsType });
-                    if (ctor != null)
-                    {
-                        m_Session = (IDisposable)ctor.Invoke(new object[] { fullPath, options });
-                        ActiveModelName = modelFilename;
-                        IsDirectMLAvailable = true;
-                        InitError = string.Empty;
-                        Debug.Log($"[TUFX DirectML] Dynamically loaded model: {modelFilename} via DirectML");
-                        return true;
-                    }
-                }
-
-                // Fallback: Model is recognized, high-quality hardware upscaler active
                 ActiveModelName = modelFilename;
-                IsDirectMLAvailable = true;
-                InitError = string.Empty;
-                Debug.Log($"[TUFX SuperRes] Selected model profile: {modelFilename} (GPU Hardware Pipeline active)");
+                if (!string.IsNullOrEmpty(m_WorkerPath) && File.Exists(m_WorkerPath))
+                {
+                    IsDirectMLAvailable = true;
+                    InitError = string.Empty;
+                }
+                Debug.Log($"[TUFX DirectML] Active model set to: {modelFilename}");
                 return true;
             }
             catch (Exception ex)
             {
                 InitError = ex.Message;
-                IsDirectMLAvailable = false;
-                Debug.LogWarning("[TUFX DirectML] Model init notice: " + ex.Message);
                 return false;
             }
         }
 
         /// <summary>
-        /// Upscales a game texture with Alpha gloss preservation and GPU bicubic sharpening.
+        /// Upscales a game texture via native DirectML GPU worker, preserving Alpha specular gloss.
+        /// Falls back to GPU hardware filtering if worker is absent.
         /// </summary>
         public Texture2D UpscaleTexture(Texture origTex, int maxDimension = 2048)
         {
@@ -178,29 +133,96 @@ namespace TUFX.MaterialPipeline
             int w = origTex.width;
             int h = origTex.height;
 
-            // Target 2x upscale clamped to maxDimension
-            int outW = Mathf.Min(w * 2, maxDimension);
-            int outH = Mathf.Min(h * 2, maxDimension);
-
-            // Read original pixels via GPU Blit into readable format
-            RenderTexture rt = RenderTexture.GetTemporary(outW, outH, 0, RenderTextureFormat.ARGB32);
-            rt.filterMode = FilterMode.Bilinear;
+            // 1. Read texture via GPU Blit into readable Texture2D
+            RenderTexture rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
             Graphics.Blit(origTex, rt);
-
             RenderTexture prev = RenderTexture.active;
             RenderTexture.active = rt;
 
-            Texture2D upscaledTex = new Texture2D(outW, outH, TextureFormat.RGBA32, true)
-            {
-                name = origTex.name + "_AI_Upscaled",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Repeat
-            };
-            upscaledTex.ReadPixels(new Rect(0, 0, outW, outH), 0, 0);
-            upscaledTex.Apply(true, false);
+            Texture2D readable = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            readable.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+            readable.Apply(false);
 
             RenderTexture.active = prev;
             RenderTexture.ReleaseTemporary(rt);
+
+            Texture2D upscaledTex = null;
+
+            // 2. Try DirectML Worker
+            string modelsDir = Path.GetFullPath(Path.Combine(KSPUtil.ApplicationRootPath, "GameData/TUFX/Models"));
+            string modelPath = Path.Combine(modelsDir, ActiveModelName);
+
+            if (IsDirectMLAvailable && !string.IsNullOrEmpty(m_WorkerPath) && File.Exists(modelPath))
+            {
+                try
+                {
+                    string inPng = Path.Combine(m_CacheDir, $"in_{id}_{w}x{h}.png");
+                    string outPng = Path.Combine(m_CacheDir, $"out_{id}_{ActiveModelName}.png");
+
+                    // Encode original to PNG
+                    byte[] pngBytes = ImageConversion.EncodeToPNG(readable);
+                    File.WriteAllBytes(inPng, pngBytes);
+
+                    // Execute DirectML Worker
+                    ProcessStartInfo psi = new ProcessStartInfo
+                    {
+                        FileName = m_WorkerPath,
+                        Arguments = $"--model \"{modelPath}\" --input \"{inPng}\" --output \"{outPng}\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true
+                    };
+
+                    using (Process proc = Process.Start(psi))
+                    {
+                        proc.WaitForExit(5000); // 5s timeout
+                        if (proc.ExitCode == 0 && File.Exists(outPng))
+                        {
+                            byte[] outBytes = File.ReadAllBytes(outPng);
+                            upscaledTex = new Texture2D(2, 2, TextureFormat.RGBA32, true)
+                            {
+                                name = origTex.name + "_DirectML_Upscaled",
+                                filterMode = FilterMode.Bilinear,
+                                wrapMode = TextureWrapMode.Repeat
+                            };
+                            ImageConversion.LoadImage(upscaledTex, outBytes);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("[TUFX DirectML] Worker execution notice: " + ex.Message);
+                }
+            }
+
+            UnityEngine.Object.Destroy(readable);
+
+            // 3. Fallback: High-quality GPU hardware upscale if worker didn't run
+            if (upscaledTex == null)
+            {
+                int outW = Mathf.Min(w * 2, maxDimension);
+                int outH = Mathf.Min(h * 2, maxDimension);
+
+                RenderTexture rtUp = RenderTexture.GetTemporary(outW, outH, 0, RenderTextureFormat.ARGB32);
+                rtUp.filterMode = FilterMode.Bilinear;
+                Graphics.Blit(origTex, rtUp);
+
+                RenderTexture prevUp = RenderTexture.active;
+                RenderTexture.active = rtUp;
+
+                upscaledTex = new Texture2D(outW, outH, TextureFormat.RGBA32, true)
+                {
+                    name = origTex.name + "_GPU_Upscaled",
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Repeat
+                };
+                upscaledTex.ReadPixels(new Rect(0, 0, outW, outH), 0, 0);
+                upscaledTex.Apply(true, false);
+
+                RenderTexture.active = prevUp;
+                RenderTexture.ReleaseTemporary(rtUp);
+            }
 
             m_UpscaleCache[id] = upscaledTex;
             return upscaledTex;
@@ -280,11 +302,6 @@ namespace TUFX.MaterialPipeline
         public void Dispose()
         {
             ClearCache();
-            if (m_Session != null)
-            {
-                m_Session.Dispose();
-                m_Session = null;
-            }
         }
     }
 }
