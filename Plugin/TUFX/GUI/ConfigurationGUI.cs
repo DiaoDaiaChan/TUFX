@@ -1173,9 +1173,9 @@ namespace TUFX
                 AddFloatParameter("Intensity", hd.intensity, 0f, 2f);
                 AddFloatParameter("Speed", hd.speed, 0.2f, 10f);
                 AddFloatParameter("Scale", hd.scale, 1f, 30f);
-                AddFloatParameter("Plume Threshold", hd.plumeThreshold, 0.5f, 10f);
-                AddFloatParameter("Ground Altitude Limit", hd.groundAltitudeLimit, 100f, 3000f);
-                GUILayout.Label("#LOC_TUFX_Desc_HeatDistortion".Localize("<size=10><color=grey>AutoAdaptive mode confines turbulence to engine plumes and low-altitude terrain shimmer, keeping vehicle & sky clear.</color></size>"));
+                AddFloatParameter("Plume Threshold", hd.plumeThreshold, 0.3f, 2.0f);
+                AddFloatParameter("Ground Altitude Limit", hd.groundAltitudeLimit, 50f, 3000f);
+                GUILayout.Label("#LOC_TUFX_Desc_HeatDistortion".Localize("<size=10><color=grey>Adaptive thermal turbulence around engine plumes, supersonic reentry shockwaves, and distant runway shimmer.</color></size>"));
             }
             GUILayout.EndVertical();
         }

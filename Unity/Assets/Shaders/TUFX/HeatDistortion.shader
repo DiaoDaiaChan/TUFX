@@ -5,8 +5,12 @@ Shader "Hidden/TUFX/HeatDistortion"
 
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
         TEXTURE2D_SAMPLER2D(_HeatMaskTex, sampler_HeatMaskTex);
+        TEXTURE2D_SAMPLER2D(_CameraDepthTexture, sampler_CameraDepthTexture);
         float4 _MainTex_TexelSize;
 
+        float2 _SunScreenPos;
+        float _VesselDepth;
+        float _ReentryHeat;
         float _Intensity;
         float _Speed;
         float _Scale;
@@ -42,38 +46,72 @@ Shader "Hidden/TUFX/HeatDistortion"
             float4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
             float luma = dot(col.rgb, float3(0.2126, 0.7152, 0.0722));
 
-            // Extract high-intensity thermal sources (engine flames, plume exhaust, re-entry glow)
-            float heat = saturate((luma - _PlumeThreshold) / max(0.1, _PlumeThreshold));
+            // Mask out celestial Sun disc so it never triggers heat distortion
+            float2 aspectVec = float2(_MainTex_TexelSize.z / _MainTex_TexelSize.w, 1.0);
+            float distToSun = length((i.texcoord - _SunScreenPos) * aspectVec);
+            if (distToSun < 0.055)
+            {
+                return float4(0, 0, 0, 1);
+            }
+
+            // Depth check:
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
+            #if UNITY_REVERSED_Z
+            bool isSky = (rawDepth <= 0.0001);
+            #else
+            bool isSky = (rawDepth >= 0.9999);
+            #endif
+
+            // Extract thermal sources (engine plume, rocket exhaust, afterburners)
+            // Soft threshold starting at user plume threshold to reliably capture all plumes
+            float minLuma = max(0.4, _PlumeThreshold * 0.75);
+            float maxLuma = minLuma + 0.65;
+            float heat = smoothstep(minLuma, maxLuma, luma);
+
+            // Reentry heat addition: during hypersonic flight, plasma glow around vessel triggers heat
+            if (_ReentryHeat > 0.0)
+            {
+                float linearDepth = isSky ? 100000.0 : LinearEyeDepth(rawDepth);
+                float vesselProx = saturate(1.0 - abs(linearDepth - _VesselDepth) / max(10.0, _VesselDepth * 0.55));
+                heat = max(heat, _ReentryHeat * vesselProx * 0.85);
+            }
+
             return float4(heat, heat, heat, 1.0);
         }
 
-        // Pass 1: Dilate and blur heat mask into surrounding atmosphere
+        // Pass 1: Multi-scale dilation and Gaussian blur for smooth plume envelope
         float4 FragBlurHeatMask(VaryingsDefault i) : SV_Target
         {
-            float2 texel = _MainTex_TexelSize.xy * 8.0;
-            float sum = 0.0;
-            float total = 0.0;
+            float2 texel = _MainTex_TexelSize.xy * 4.0;
+            float maxVal = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).r;
+            float sum = maxVal * 0.25;
+            float total = 0.25;
 
-            const float2 offsets[9] = {
-                float2( 0.0,  0.0),
+            const float2 offsets[12] = {
                 float2( 1.0,  0.0), float2(-1.0,  0.0),
                 float2( 0.0,  1.0), float2( 0.0, -1.0),
                 float2( 1.5,  1.5), float2(-1.5,  1.5),
-                float2( 1.5, -1.5), float2(-1.5, -1.5)
+                float2( 1.5, -1.5), float2(-1.5, -1.5),
+                float2( 3.0,  0.0), float2(-3.0,  0.0),
+                float2( 0.0,  3.0), float2( 0.0, -3.0)
             };
 
             [unroll]
-            for (int k = 0; k < 9; k++)
+            for (int k = 0; k < 12; k++)
             {
-                float w = (k == 0) ? 0.3 : 0.0875;
-                sum += SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + offsets[k] * texel).r * w;
+                float v = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord + offsets[k] * texel).r;
+                maxVal = max(maxVal, v);
+                float w = (k < 8) ? 0.07 : 0.04;
+                sum += v * w;
                 total += w;
             }
 
-            return float4(sum / total, 0, 0, 1.0);
+            // Dilate core + smooth Gaussian envelope
+            float dilated = lerp(sum / total, maxVal, 0.45);
+            return float4(dilated, dilated, dilated, 1.0);
         }
 
-        // Pass 2: Thermal Distortion with Adaptive Plume & Ground Haze Masking
+        // Pass 2: Thermal Distortion with Adaptive Plume, Reentry & Ground Haze Masking
         float4 FragDistort(VaryingsDefault i) : SV_Target
         {
             if (_Intensity <= 0.0001)
@@ -82,16 +120,24 @@ Shader "Hidden/TUFX/HeatDistortion"
             }
 
             float2 uv = i.texcoord;
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, uv);
+            #if UNITY_REVERSED_Z
+            bool isSky = (rawDepth <= 0.0001);
+            #else
+            bool isSky = (rawDepth >= 0.9999);
+            #endif
+            float linearDepth = isSky ? 100000.0 : LinearEyeDepth(rawDepth);
+
             float time = _Time.y * _Speed;
 
-            // 1. Plume proximity mask (dilated thermal mask from engine flame)
+            // 1. Plume & Reentry proximity mask (dilated thermal mask from engine flame)
             float plumeMask = SAMPLE_TEXTURE2D(_HeatMaskTex, sampler_HeatMaskTex, uv).r;
-            // Expand plume falloff smoothly
-            plumeMask = saturate(plumeMask * 2.5);
 
             // 2. Ground heat haze mask (near horizon / terrain when at low altitude)
-            // Ground heat haze peaks near lower-middle of screen and fades towards sky
-            float groundMask = saturate((1.0 - uv.y * 1.5)) * _GroundHazeWeight;
+            // CRUCIAL: Ground mirage ONLY affects distant ground/runway (linearDepth > 35m)!
+            // The active spacecraft itself (linearDepth < 30m) is 100% IMMUNE to ground wobble!
+            float groundDistWeight = (!isSky) ? saturate((linearDepth - 35.0) / 75.0) : 0.0;
+            float groundMask = groundDistWeight * saturate(1.0 - uv.y * 1.3) * _GroundHazeWeight;
 
             // Composite spatial heat mask
             float activeMask = max(plumeMask, groundMask);
@@ -111,14 +157,19 @@ Shader "Hidden/TUFX/HeatDistortion"
             }
 
             // Turbulent multi-frequency noise field
-            float n1 = Noise2D(uv * _Scale + float2(0.0, time * 1.2));
-            float n2 = Noise2D(uv * (_Scale * 1.8) + float2(time * 0.8, -time * 0.4));
-            float2 flow = float2(n1 - 0.5, n2 - 0.5) * (_Intensity * 0.035 * activeMask);
+            float2 noiseUV = uv * _Scale;
+            float n1 = Noise2D(noiseUV + float2(time * 1.1, time * 0.7));
+            float n2 = Noise2D(noiseUV * 1.6 + float2(-time * 0.8, time * 1.3));
+            float n3 = Noise2D(noiseUV * 3.2 + float2(time * 1.5, -time * 1.1));
 
-            // Spectral chromatic aberration on turbulent boundary layer
-            float r = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + flow * 1.08).r;
+            float2 flow = float2(n1 - 0.5 + (n3 - 0.5) * 0.35, n2 - 0.5 + (n3 - 0.5) * 0.35);
+            // Realistic physical displacement amplitude: ~4 to 7 pixels max at intensity 1.0!
+            flow *= (_Intensity * 0.006 * activeMask);
+
+            // Subtle spectral dispersion (chromatic refraction)
+            float r = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + flow * 1.02).r;
             float g = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + flow).g;
-            float b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + flow * 0.92).b;
+            float b = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv + flow * 0.98).b;
 
             return float4(r, g, b, 1.0);
         }
