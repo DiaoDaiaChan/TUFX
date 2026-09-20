@@ -19,36 +19,6 @@ namespace TUFX
     {
 
         internal static TexturesUnlimitedFXLoader INSTANCE;
-
-        static TexturesUnlimitedFXLoader()
-        {
-            AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
-        }
-
-        private static System.Reflection.Assembly OnAssemblyResolve(object sender, ResolveEventArgs args)
-        {
-            try
-            {
-                string simpleName = new System.Reflection.AssemblyName(args.Name).Name;
-                string resourceName = simpleName + ".dll";
-                var executingAssembly = typeof(TexturesUnlimitedFXLoader).Assembly;
-                using (var stream = executingAssembly.GetManifestResourceStream(resourceName))
-                {
-                    if (stream != null)
-                    {
-                        byte[] data = new byte[stream.Length];
-                        stream.Read(data, 0, data.Length);
-                        return System.Reflection.Assembly.Load(data);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("[TUFX] AssemblyResolve failed for " + args.Name + ": " + ex.Message);
-            }
-            return null;
-        }
-
         private ConfigurationGUI configGUI;
         private DebugGUI debugGUI;
 
