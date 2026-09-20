@@ -1287,6 +1287,37 @@ namespace TUFX
                     }
                     GUILayout.EndVertical();
 
+                    // DirectML Engine & Model Info
+                    var ai = mgr.SuperResEngine;
+                    if (ai != null && ai.IsDirectMLAvailable)
+                    {
+                        GUILayout.BeginVertical(HighLogic.Skin.box);
+                        GUILayout.Label($"<b>DirectML AI 引擎状态:</b> <color=#55FF55><b>GPU 硬件加速已就绪 (DirectX 12)</b></color>");
+                        GUILayout.Label($"<b>当前加载模型:</b> <color=#FFFF55><b>{ai.ActiveModelName}</b></color>");
+
+                        if (ai.AvailableModels.Count > 1)
+                        {
+                            GUILayout.BeginHorizontal();
+                            GUILayout.Label("切换模型:", GUILayout.Width(70));
+                            for (int m = 0; m < ai.AvailableModels.Count; m++)
+                            {
+                                string mName = ai.AvailableModels[m];
+                                bool isCur = (mName == ai.ActiveModelName);
+                                string btnText = isCur ? $"<color=#00FF88><b>[{mName}]</b></color>" : mName;
+                                if (GUILayout.Button(btnText, GUILayout.ExpandWidth(false)))
+                                {
+                                    ai.LoadModel(mName);
+                                }
+                            }
+                            GUILayout.EndHorizontal();
+                        }
+                        GUILayout.EndVertical();
+                    }
+                    else if (ai != null)
+                    {
+                        GUILayout.Label($"<color=#FF7777>DirectML 引擎未激活: {ai.InitError}</color>");
+                    }
+
                     // Control Buttons & Sliders
                     GUILayout.BeginHorizontal();
                     GUILayout.Label("渐进替换间隔 (秒):", GUILayout.Width(130));
@@ -1301,7 +1332,15 @@ namespace TUFX
                     }
 
                     GUI.enabled = !mgr.IsProcessing;
-                    if (GUILayout.Button("<color=#FFFF00><b>启动逐部件打标 (Simulate AI Upscale)</b></color>"))
+                    if (ai != null && ai.IsDirectMLAvailable)
+                    {
+                        if (GUILayout.Button("<color=#00FFFF><b>启动 DirectML 飞船 AI 超分 (Real AI)</b></color>"))
+                        {
+                            mgr.StartProgressiveAIUpscale();
+                        }
+                    }
+
+                    if (GUILayout.Button("<color=#FFFF00><b>逐部件水印测试 (Debug Stamp)</b></color>"))
                     {
                         mgr.StartProgressiveDebugStamp();
                     }
@@ -1313,7 +1352,7 @@ namespace TUFX
                     }
                     GUILayout.EndHorizontal();
 
-                    GUILayout.Label("<size=10><color=grey>材质流式重构底座：在 GPU 显存内安全拦截当前飞船各部件材质，打上黄色粗体 DEBUG 水印并以协程逐个热替换，精准验证运行时资产劫持、贴图热更新与未来 AI 超分管道可行性。</color></size>");
+                    GUILayout.Label("<size=10><color=grey>DirectML AI 超分管线：基于微软官方 DirectML + ONNX Runtime 原生 GPU 硬件加速，零 Python/PyTorch 依赖，在飞船材质流式底座上逐个部件将贴图毫秒级无感超分并热替换。</color></size>");
                 }
                 else
                 {

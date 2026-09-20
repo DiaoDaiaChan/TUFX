@@ -15,6 +15,7 @@ namespace TUFX.MaterialPipeline
         public VesselMaterialTracker Tracker { get; private set; }
         public MaterialTextureRegistry Registry { get; private set; }
         public DebugTextureStamper Stamper { get; private set; }
+        public DirectMLSuperResEngine SuperResEngine { get; private set; }
 
         public bool IsHookActive { get; set; } = false;
         public float ProgressiveDelay { get; set; } = 0.10f;
@@ -43,6 +44,7 @@ namespace TUFX.MaterialPipeline
             Tracker = new VesselMaterialTracker();
             Registry = new MaterialTextureRegistry();
             Stamper = new DebugTextureStamper();
+            SuperResEngine = new DirectMLSuperResEngine();
 
             Tracker.Initialize();
         }
@@ -57,6 +59,11 @@ namespace TUFX.MaterialPipeline
             if (Stamper != null)
             {
                 Stamper.ClearCache();
+            }
+            if (SuperResEngine != null)
+            {
+                SuperResEngine.Dispose();
+                SuperResEngine = null;
             }
             Instance = null;
         }
@@ -118,6 +125,56 @@ namespace TUFX.MaterialPipeline
         }
 
         /// <summary>
+        /// Starts hardware-accelerated AI super-resolution on active vessel parts using DirectML.
+        /// </summary>
+        public void StartProgressiveAIUpscale()
+        {
+            if (IsProcessing)
+            {
+                Debug.LogWarning("[TUFX MaterialPipeline] Already processing a vessel!");
+                return;
+            }
+
+            if (SuperResEngine == null || !SuperResEngine.IsDirectMLAvailable)
+            {
+                StatusMessage = "DirectML not available: " + (SuperResEngine != null ? SuperResEngine.InitError : "Engine Null");
+                return;
+            }
+
+            var scan = Tracker.ScanActiveVessel();
+            if (scan == null || scan.PartCount == 0)
+            {
+                StatusMessage = "Cannot start: No active vessel parts found.";
+                return;
+            }
+
+            IsProcessing = true;
+            IsHookActive = true;
+            CurrentProgress = 0;
+            TotalProgress = scan.PartCount;
+            StatusMessage = $"Running AI Super-Resolution ({SuperResEngine.ActiveModelName})...";
+
+            m_ActiveCoroutine = StartCoroutine(SuperResEngine.SimulateProgressiveAIUpscale(
+                scan,
+                Registry,
+                ProgressiveDelay,
+                (cur, tot) =>
+                {
+                    CurrentProgress = cur;
+                    TotalProgress = tot;
+                    StatusMessage = string.Format("AI Upscaling Part {0}/{1}...", cur, tot);
+                },
+                () =>
+                {
+                    IsProcessing = false;
+                    StatusMessage = string.Format("AI Upscale Complete! Enhanced {0} materials across {1} parts.",
+                        Registry.OverrideCount, TotalProgress);
+                    m_ActiveCoroutine = null;
+                }
+            ));
+        }
+
+        /// <summary>
         /// Restores all original textures and terminates any running coroutine.
         /// </summary>
         public void RestoreOriginalTextures()
@@ -142,6 +199,11 @@ namespace TUFX.MaterialPipeline
             if (Stamper != null)
             {
                 Stamper.ClearCache();
+            }
+
+            if (SuperResEngine != null)
+            {
+                SuperResEngine.ClearCache();
             }
         }
     }
