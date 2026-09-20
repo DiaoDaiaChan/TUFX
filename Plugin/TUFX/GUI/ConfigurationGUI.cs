@@ -936,8 +936,10 @@ namespace TUFX
             bool showProps = AddEffectHeader("Intel Conservative Morphological Anti-Aliasing (CMAA 2)", out CMAA2Effect cmaa);
             if (showProps)
             {
-                AddFloatParameter("Edge Sensitivity", cmaa.edgeThreshold, 0.02f, 0.25f);
-                AddFloatParameter("Extra Sharpness", cmaa.extraSharpness, 0.1f, 1.0f);
+                AddFloatParameter("Edge Sensitivity", cmaa.edgeThreshold, 0.02f, 0.20f);
+                AddBoolParameter("Extra Sharpness", cmaa.extraSharpness);
+                AddIntParameter("Max Search Length", cmaa.maxSearchLength, 8, 86);
+                AddIntParameter("Debug Mode (0=Off,1=Edge,2=Weight)", cmaa.debugMode, 0, 2);
                 GUILayout.Label("#LOC_TUFX_Desc_CMAA2".Localize("<size=10><color=grey>Intel's state-of-the-art morphological AA algorithm. Extremely sharp edge smoothing without temporal ghosting or blur.</color></size>"));
             }
             GUILayout.EndVertical();
