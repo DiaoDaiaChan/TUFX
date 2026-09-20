@@ -1046,11 +1046,12 @@ namespace TUFX
             bool showProps = AddEffectHeader("Contact Shadows", out ContactShadows cs);
             if (showProps)
             {
-                AddFloatParameter("Ray Length", cs.rayLength, 0.02f, 0.5f);
-                AddIntParameter("Steps", cs.raySteps, 4, 16);
+                AddFloatParameter("Ray Length", cs.rayLength, 0.05f, 2.0f);
+                AddIntParameter("Steps", cs.raySteps, 4, 32);
                 AddFloatParameter("Intensity", cs.intensity, 0f, 1f);
-                AddFloatParameter("Thickness", cs.thickness, 0.01f, 0.2f);
-                GUILayout.Label("#LOC_TUFX_Desc_ContactShadows".Localize("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages and landing gear.</color></size>"));
+                AddFloatParameter("Thickness", cs.thickness, 0.01f, 1.0f);
+                AddIntParameter("Debug Mode (0=Off, 1=Red, 2=Mask, 3=Normals)", cs.debugMode, 0, 3);
+                GUILayout.Label("#LOC_TUFX_Desc_ContactShadows".Localize("<size=10><color=grey>Screen-space micro-geometry contact shadows between vessel stages, landing gear, and surface details.</color></size>"));
             }
             GUILayout.EndVertical();
         }

@@ -6,17 +6,20 @@ namespace UnityEngine.Rendering.PostProcessing
     [PostProcess(typeof(ContactShadowsRenderer), PostProcessEvent.BeforeStack, "TUFX/Screen Space Contact Shadows", sortingPriority: 30)]
     public sealed class ContactShadows : PostProcessEffectSettings
     {
-        [Range(0.02f, 0.5f), Tooltip("Max length of contact shadow ray in view space.")]
-        public FloatParameter rayLength = new FloatParameter { value = 0.12f };
+        [Range(0.05f, 2.0f), Tooltip("Max length of contact shadow ray in view space.")]
+        public FloatParameter rayLength = new FloatParameter { value = 0.35f };
 
-        [Range(4, 16), Tooltip("Number of raymarching steps.")]
-        public IntParameter raySteps = new IntParameter { value = 8 };
+        [Range(4, 32), Tooltip("Number of raymarching steps.")]
+        public IntParameter raySteps = new IntParameter { value = 12 };
 
         [Range(0f, 1f), Tooltip("Contact shadow darkness.")]
-        public FloatParameter intensity = new FloatParameter { value = 0.75f };
+        public FloatParameter intensity = new FloatParameter { value = 0.85f };
 
-        [Range(0.01f, 0.2f), Tooltip("Surface thickness test value.")]
-        public FloatParameter thickness = new FloatParameter { value = 0.04f };
+        [Range(0.01f, 1.0f), Tooltip("Surface thickness test value.")]
+        public FloatParameter thickness = new FloatParameter { value = 0.18f };
+
+        [Range(0, 3), Tooltip("Debug Mode: 0=Off, 1=Red Highlight, 2=Clay Mask, 3=Normals")]
+        public IntParameter debugMode = new IntParameter { value = 0 };
 
         public override bool IsEnabledAndSupported(PostProcessRenderContext context)
         {
@@ -29,6 +32,7 @@ namespace UnityEngine.Rendering.PostProcessing
             loadIntParameter(config, "RaySteps", raySteps);
             loadFloatParameter(config, "Intensity", intensity);
             loadFloatParameter(config, "Thickness", thickness);
+            loadIntParameter(config, "DebugMode", debugMode);
         }
 
         public override void Save(ConfigNode config)
@@ -37,6 +41,7 @@ namespace UnityEngine.Rendering.PostProcessing
             saveIntParameter(config, "RaySteps", raySteps);
             saveFloatParameter(config, "Intensity", intensity);
             saveFloatParameter(config, "Thickness", thickness);
+            saveIntParameter(config, "DebugMode", debugMode);
         }
     }
 
@@ -68,14 +73,21 @@ namespace UnityEngine.Rendering.PostProcessing
             }
 
             // Determine light direction in view space (Sun / Main Light)
-            Vector3 sunDirWorld = Vector3.up;
-            if (RenderSettings.sun != null)
+            Vector3 sunDirWorld = Vector3.forward;
+            if (Sun.Instance != null && Sun.Instance.sunLight != null)
+            {
+                sunDirWorld = -Sun.Instance.sunLight.transform.forward;
+            }
+            else if (Planetarium.fetch != null && Planetarium.fetch.Sun != null && context.camera != null)
+            {
+                Vector3d camPosD = (Vector3d)context.camera.transform.position;
+                Vector3d sunPosD = Planetarium.fetch.Sun.position;
+                Vector3d camToSun = sunPosD - camPosD;
+                sunDirWorld = (Vector3)(camToSun.normalized);
+            }
+            else if (RenderSettings.sun != null)
             {
                 sunDirWorld = -RenderSettings.sun.transform.forward;
-            }
-            else if (Sun.Instance != null && context.camera != null)
-            {
-                sunDirWorld = (Sun.Instance.transform.position - context.camera.transform.position).normalized;
             }
             else
             {
@@ -111,6 +123,7 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetInt("_RaySteps", settings.raySteps.value);
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_Thickness", settings.thickness.value);
+            sheet.properties.SetFloat("_DebugMode", (float)settings.debugMode.value);
 
             int width = context.width;
             int height = context.height;

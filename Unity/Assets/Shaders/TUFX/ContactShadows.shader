@@ -14,6 +14,7 @@ Shader "Hidden/TUFX/ContactShadows"
         int _RaySteps;
         float _Intensity;
         float _Thickness;
+        float _DebugMode;
 
         float3 ReconstructViewPos(float2 uv, float linearDepth)
         {
@@ -28,93 +29,100 @@ Shader "Hidden/TUFX/ContactShadows"
         {
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
             #if UNITY_REVERSED_Z
-                if (rawDepth <= 0.00001) return float4(1.0, 1.0, 1.0, 1.0);
+                bool isSky = (rawDepth <= 0.00001);
             #else
-                if (rawDepth >= 0.99999) return float4(1.0, 1.0, 1.0, 1.0);
+                bool isSky = (rawDepth >= 0.99999);
             #endif
+
+            if (isSky)
+            {
+                return (_DebugMode >= 3.0) ? float4(0.0, 0.0, 0.0, 1.0) : float4(1.0, 1.0, 1.0, 1.0);
+            }
 
             float linearDepth = LinearEyeDepth(rawDepth);
             if (linearDepth <= 0.01 || linearDepth > 2000.0)
             {
-                return float4(1.0, 1.0, 1.0, 1.0);
+                return (_DebugMode >= 3.0) ? float4(0.0, 0.0, 0.0, 1.0) : float4(1.0, 1.0, 1.0, 1.0);
             }
 
             float2 texel = _MainTex_TexelSize.xy;
-            float pixLZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(-texel.x, 0)));
-            float pixRZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2( texel.x, 0)));
-            float pixTZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(0,  texel.y)));
-            float pixBZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(0, -texel.y)));
+            float pixCZ = linearDepth;
+            float pixLZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(-texel.x, 0.0)));
+            float pixRZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2( texel.x, 0.0)));
+            float pixTZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(0.0,  texel.y)));
+            float pixBZ = LinearEyeDepth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord + float2(0.0, -texel.y)));
 
-            float3 centerPos = ReconstructViewPos(i.texcoord, linearDepth);
-            float3 leftPos   = ReconstructViewPos(i.texcoord + float2(-texel.x, 0), pixLZ);
-            float3 rightPos  = ReconstructViewPos(i.texcoord + float2( texel.x, 0), pixRZ);
-            float3 topPos    = ReconstructViewPos(i.texcoord + float2(0,  texel.y), pixTZ);
-            float3 botPos    = ReconstructViewPos(i.texcoord + float2(0, -texel.y), pixBZ);
+            float3 centerPos = ReconstructViewPos(i.texcoord, pixCZ);
+            float3 leftPos   = ReconstructViewPos(i.texcoord + float2(-texel.x, 0.0), pixLZ);
+            float3 rightPos  = ReconstructViewPos(i.texcoord + float2( texel.x, 0.0), pixRZ);
+            float3 topPos    = ReconstructViewPos(i.texcoord + float2(0.0,  texel.y), pixTZ);
+            float3 botPos    = ReconstructViewPos(i.texcoord + float2(0.0, -texel.y), pixBZ);
 
-            float3 dx = rightPos - leftPos;
-            float3 dy = topPos - botPos;
+            // Edge-preserving normal reconstruction: pick the closer neighbor on each axis to avoid depth discontinuities at silhouettes
+            float3 dx = (abs(pixRZ - pixCZ) < abs(pixLZ - pixCZ)) ? (rightPos - centerPos) : (centerPos - leftPos);
+            float3 dy = (abs(pixTZ - pixCZ) < abs(pixBZ - pixCZ)) ? (topPos - centerPos)   : (centerPos - botPos);
+
             float3 normal = cross(dy, dx);
             float lenSq = dot(normal, normal);
-            if (lenSq > 0.0001)
+            if (lenSq > 0.00001)
             {
-                normal *= rsqrt(lenSq);
+                normal = normalize(normal);
             }
             else
             {
                 normal = float3(0.0, 0.0, -1.0);
             }
 
-            float3 viewVec = normalize(-centerPos);
-            if (dot(normal, viewVec) < 0.0)
+            // Normal in reconstructed view-space should point towards camera (-Z)
+            if (normal.z > 0.0)
             {
                 normal = -normal;
             }
 
+            if (_DebugMode >= 3.0)
+            {
+                return float4(normal * 0.5 + 0.5, 1.0);
+            }
+
             float3 rayDir = normalize(_LightDirView);
             float NdotL = dot(normal, rayDir);
-            float slopeFactor = saturate(1.0 - NdotL);
 
-            // Smooth transition at terminator: eliminates razor-sharp cutoff line on curved cylinders & dishes
-            float lightFacing = smoothstep(-0.02, 0.25, NdotL);
-            if (lightFacing <= 0.0001)
+            // Smooth transition at terminator: surfaces facing the light receive contact shadows
+            float lightFacing = saturate(NdotL * 3.0);
+            if (lightFacing <= 0.001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            // Distance fadeout: contact shadows are micro-details, smoothly fade beyond 300m
-            float distFade = saturate((300.0 - linearDepth) / 80.0);
+            // Distance fadeout: smoothly fade between 150m and 500m
+            float distFade = saturate((500.0 - linearDepth) / 350.0);
             if (distFade <= 0.001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
             }
 
-            // Contact shadows strictly capture micro-geometry gaps (panel seams, decouplers, landing pads).
-            // Ray length is strictly capped to 0.25m so grazing rays NEVER cross and penetrate curved rocket hulls!
-            float adaptiveThickness = clamp(max(_Thickness, linearDepth * 0.001), 0.01, 0.08);
-            float adaptiveRayLength = clamp(max(_RayLength, linearDepth * 0.003), 0.03, 0.25);
+            // Adaptive Ray length and thickness: scale proportionally with distance
+            float maxRayLength = max(_RayLength, linearDepth * 0.015);
+            float thickness = max(_Thickness, linearDepth * 0.008);
 
-            // Generous normal bias to lift ray origin reliably above polygon facets of curved geometry
-            float normalBias = max(0.02, adaptiveThickness * 0.40 + slopeFactor * 0.015);
+            // Normal bias lifts ray off surface to avoid self-shadowing acne
+            float normalBias = max(0.008, thickness * 0.12);
             float3 originPos = centerPos + normal * normalBias;
 
             // March towards light source in view space
-            float3 endPos = originPos + rayDir * adaptiveRayLength;
-            if (endPos.z <= 0.01) return float4(1.0, 1.0, 1.0, 1.0);
+            float3 endPos = originPos + rayDir * maxRayLength;
+            if (endPos.z <= 0.01) endPos.z = 0.01;
 
-            float2 startUV;
-            startUV.x = (originPos.x / originPos.z - _NDCToViewAdd.x) / _NDCToViewMul.x;
-            startUV.y = (originPos.y / originPos.z - _NDCToViewAdd.y) / _NDCToViewMul.y;
-
+            float2 startUV = i.texcoord;
             float2 endUV;
             endUV.x = (endPos.x / endPos.z - _NDCToViewAdd.x) / _NDCToViewMul.x;
             endUV.y = (endPos.y / endPos.z - _NDCToViewAdd.y) / _NDCToViewMul.y;
 
             float2 rayDeltaUV = endUV - startUV;
-            float2 rayPixelDelta = rayDeltaUV * _MainTex_TexelSize.zw;
-            float rayPixelDist = length(rayPixelDelta);
+            float rayPixelDist = length(rayDeltaUV * _MainTex_TexelSize.zw);
 
-            // Subpixel smooth fade out instead of hard early-out
-            float pixelWeight = saturate((rayPixelDist - 0.5) / 2.5);
+            // Subpixel fade out only when ray is essentially zero pixels on screen
+            float pixelWeight = saturate(rayPixelDist / 1.5);
             if (pixelWeight <= 0.001)
             {
                 return float4(1.0, 1.0, 1.0, 1.0);
@@ -126,14 +134,14 @@ Shader "Hidden/TUFX/ContactShadows"
             float invZ_start = 1.0 / originPos.z;
             float invZ_end   = 1.0 / endPos.z;
 
-            // Slope-adaptive bias: prevents cylindrical & dish polygon facets from self-shadowing
-            float bias = max(0.02, adaptiveThickness * 0.30 + slopeFactor * 0.035 + linearDepth * 0.0008);
+            float bias = max(0.006, linearDepth * 0.0006);
             float occlusion = 0.0;
+            int steps = clamp(_RaySteps, 4, 32);
 
-            [unroll(16)]
-            for (int s = 1; s <= _RaySteps; s++)
+            [loop]
+            for (int s = 1; s <= steps; s++)
             {
-                float t = ((float)s - 0.5 + (dither - 0.5) * 0.8) / (float)_RaySteps;
+                float t = ((float)s - 0.5 + (dither - 0.5) * 0.8) / (float)steps;
                 float2 sampleUV = startUV + rayDeltaUV * t;
                 if (sampleUV.x < 0.0 || sampleUV.x > 1.0 || sampleUV.y < 0.0 || sampleUV.y > 1.0)
                     break;
@@ -151,22 +159,32 @@ Shader "Hidden/TUFX/ContactShadows"
                 float expectedDepth = 1.0 / lerp(invZ_start, invZ_end, t);
                 float depthDiff = expectedDepth - sampleLinearDepth;
 
-                if (depthDiff > bias && depthDiff < adaptiveThickness)
+                if (depthDiff > bias && depthDiff < thickness)
                 {
-                    float occl = 1.0 - saturate(depthDiff / adaptiveThickness);
-                    occlusion = max(occlusion, occl);
+                    // Solid occlusion across occluder body with smooth fadeout near the tail
+                    float tail = (depthDiff - thickness * 0.7) / max(0.001, thickness * 0.3);
+                    float occl = 1.0 - saturate(tail);
+                    float contactFalloff = 1.0 - t * 0.35;
+                    occlusion = max(occlusion, occl * contactFalloff);
                     break;
                 }
             }
 
             occlusion *= pixelWeight * distFade;
-            float shadow = 1.0 - occlusion * _Intensity * lightFacing;
+            float shadow = 1.0 - saturate(occlusion * _Intensity * lightFacing);
+
             return float4(shadow, shadow, shadow, 1.0);
         }
 
-        // Pass 1: 8-tap Edge-preserving bilateral filter for Contact Shadows (eliminates checkerboard dither)
+        // Pass 1: 8-tap Edge-preserving bilateral filter for Contact Shadows
         float4 FragContactShadowDenoise(VaryingsDefault i) : SV_Target
         {
+            if (_DebugMode >= 3.0)
+            {
+                // Passthrough for Normals
+                return SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
+            }
+
             float centerShadow = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord).r;
             float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
             #if UNITY_REVERSED_Z
@@ -211,7 +229,38 @@ Shader "Hidden/TUFX/ContactShadows"
         float4 FragContactShadowComposite(VaryingsDefault i) : SV_Target
         {
             float4 scene = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.texcoord);
-            float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_MainTex, i.texcoord).r;
+            float shadow = SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, i.texcoord).r;
+
+            float rawDepth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, sampler_CameraDepthTexture, i.texcoord);
+            #if UNITY_REVERSED_Z
+                bool isSky = (rawDepth <= 0.00001);
+            #else
+                bool isSky = (rawDepth >= 0.99999);
+            #endif
+
+            if (_DebugMode == 1.0)
+            {
+                // Debug Mode 1: Red Highlight Overlay on Scene
+                if (isSky) return scene * 0.4;
+                float occl = saturate((1.0 - shadow) * 1.5);
+                float luma = dot(scene.rgb, float3(0.299, 0.587, 0.114));
+                float3 baseScene = lerp(scene.rgb, float3(luma, luma, luma), 0.5) * 0.5;
+                float3 redHighlight = float3(1.0, 0.12, 0.12);
+                return float4(lerp(baseScene, redHighlight, occl), scene.a);
+            }
+            if (_DebugMode == 2.0)
+            {
+                // Debug Mode 2: Clay Model Shadow Mask
+                if (isSky) return float4(0.0, 0.0, 0.0, 1.0);
+                return float4(shadow, shadow, shadow, 1.0);
+            }
+            if (_DebugMode >= 3.0)
+            {
+                // Debug Mode 3: Reconstructed Normals
+                if (isSky) return float4(0.0, 0.0, 0.0, 1.0);
+                return SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, i.texcoord);
+            }
+
             return float4(scene.rgb * shadow, scene.a);
         }
     ENDHLSL
