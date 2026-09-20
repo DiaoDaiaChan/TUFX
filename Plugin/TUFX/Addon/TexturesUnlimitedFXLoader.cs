@@ -38,6 +38,8 @@ namespace TUFX
 
         public class Configuration
         {
+            public const string NODE_NAME = "TUFX_CONFIGURATION";
+
             [Persistent] public string MainMenuProfile = "Default-MainMenu";
             [Persistent] public string SpaceCenterSceneProfile = "Default-KSC";
             [Persistent] public string EditorSceneProfile = "Default-Editor";
@@ -48,6 +50,7 @@ namespace TUFX
             [Persistent] public bool ShowToolbarButton = true;
         }
 
+        internal static UrlDir.UrlConfig defaultConfigUrl = null;
 		internal static readonly Configuration defaultConfiguration = new Configuration();
 
         private PostProcessVolume mainVolume;
@@ -88,8 +91,6 @@ namespace TUFX
             DontDestroyOnLoad(this);
             detectDeferredPipeline();
             TUFX.MaterialPipeline.MaterialPipelineManager.EnsureInstance(gameObject);
-            GameEvents.onLevelWasLoaded.Add(new EventData<GameScenes>.OnEvent(onLevelLoaded));
-            GameEvents.OnCameraChange.Add(new EventData<CameraManager.CameraMode>.OnEvent(cameraChange));
 
 			// set up toolbar
 			if (defaultConfiguration.ShowToolbarButton)
@@ -134,6 +135,8 @@ namespace TUFX
             if (Resources == null)
             {
                 loadResources();
+                GameEvents.onLevelWasLoaded.Add(new EventData<GameScenes>.OnEvent(onLevelLoaded));
+                GameEvents.OnCameraChange.Add(new EventData<CameraManager.CameraMode>.OnEvent(cameraChange));
             }
 
             loadTextures();
@@ -402,10 +405,10 @@ namespace TUFX
                         " a duplicate name; please check your configurations and remove any duplicates.  Only the first configuration parsed for any one name will be loaded.");
                 }
             }
-            ConfigNode config = GameDatabase.Instance.GetConfigNodes("TUFX_CONFIGURATION").FirstOrDefault(m=>m.GetValue("name")=="Default");
-            if (config != null)
+            defaultConfigUrl = GameDatabase.Instance.GetConfigs(Configuration.NODE_NAME).FirstOrDefault();
+            if (defaultConfigUrl != null)
             {
-                ConfigNode.LoadObjectFromConfig(defaultConfiguration, config);
+                ConfigNode.LoadObjectFromConfig(defaultConfiguration, defaultConfigUrl.config);
             }
         }
 
@@ -483,7 +486,13 @@ namespace TUFX
             switch (scene)
             {
                 case GameScenes.MAINMENU:
-                    Log.exception("The main menu profile must be set via config!");
+                    defaultConfiguration.MainMenuProfile = profile;
+                    if (defaultConfigUrl != null)
+                    {
+                        defaultConfigUrl.config = new ConfigNode(Configuration.NODE_NAME);
+                        ConfigNode.CreateConfigFromObject(defaultConfiguration, defaultConfigUrl.config);
+                        defaultConfigUrl.parent.SaveConfigs();
+                    }
                     break;
                 case GameScenes.SPACECENTER:
                     HighLogic.CurrentGame.Parameters.CustomParams<TUFXGameSettings>().SpaceCenterSceneProfile = profile;
@@ -627,7 +636,7 @@ namespace TUFX
                 galaxyCamera.allowHDR = currentProfile.HDREnabled;
             }
 
-			if (HighLogic.LoadedScene == GameScenes.MAINMENU || HighLogic.LoadedScene == GameScenes.SPACECENTER)
+			if (HighLogic.LoadedScene == GameScenes.MAINMENU || HighLogic.LoadedScene == GameScenes.SPACECENTER || HighLogic.LoadedScene == GameScenes.EDITOR)
 			{
 				ApplyProfileToCamera(Camera.main, currentProfile, true, true);
 			}
@@ -636,7 +645,10 @@ namespace TUFX
 				var editorCameras = EditorCamera.Instance.cam.gameObject.GetComponentsInChildren<Camera>();
 				foreach (var cam in editorCameras)
 				{
-					ApplyProfileToCamera(cam, currentProfile, false, false);
+					if (!object.ReferenceEquals(cam, Camera.main))
+					{
+						ApplyProfileToCamera(cam, currentProfile, false, false);
+					}
 				}
 			}
             bool scaledCameraIsPrimary = HighLogic.LoadedScene == GameScenes.TRACKSTATION || MapView.MapIsEnabled;

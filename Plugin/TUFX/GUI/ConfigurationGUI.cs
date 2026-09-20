@@ -379,7 +379,7 @@ namespace TUFX
             for (int i = 0; i < len; i++)
             {
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Profile: ".Localize() + profileNames[i]))
+                if (GUILayout.Button(profileNames[i]))
                 {
                     string newProfileName = profileNames[i];
                     Log.debug("Profile Selected: " + newProfileName);
