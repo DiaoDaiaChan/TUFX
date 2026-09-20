@@ -50,7 +50,7 @@ namespace UnityEngine.Rendering.PostProcessing
     {
         public override DepthTextureMode GetCameraFlags()
         {
-            return DepthTextureMode.Depth;
+            return DepthTextureMode.Depth | DepthTextureMode.DepthNormals;
         }
 
         public override void Render(PostProcessRenderContext context)
@@ -124,6 +124,13 @@ namespace UnityEngine.Rendering.PostProcessing
             sheet.properties.SetFloat("_Intensity", settings.intensity.value);
             sheet.properties.SetFloat("_Thickness", settings.thickness.value);
             sheet.properties.SetFloat("_DebugMode", (float)settings.debugMode.value);
+
+            bool isDeferred = context.camera != null && context.camera.actualRenderingPath == RenderingPath.DeferredShading;
+            sheet.properties.SetFloat("_IsDeferred", isDeferred ? 1.0f : 0.0f);
+            if (isDeferred)
+            {
+                sheet.properties.SetMatrix("_WorldToCameraMatrix", context.camera.worldToCameraMatrix);
+            }
 
             int width = context.width;
             int height = context.height;

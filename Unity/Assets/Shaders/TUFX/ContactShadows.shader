@@ -6,6 +6,9 @@ Shader "Hidden/TUFX/ContactShadows"
         TEXTURE2D_SAMPLER2D(_MainTex, sampler_MainTex);
         TEXTURE2D_SAMPLER2D(_CameraDepthTexture, sampler_CameraDepthTexture);
         TEXTURE2D_SAMPLER2D(_ShadowTex, sampler_ShadowTex);
+        Texture2D _CameraGBufferTexture2;
+        float4x4 _WorldToCameraMatrix;
+        float _IsDeferred;
         float4 _MainTex_TexelSize;
         float2 _NDCToViewMul;
         float2 _NDCToViewAdd;
@@ -58,19 +61,31 @@ Shader "Hidden/TUFX/ContactShadows"
             float3 topPos    = ReconstructViewPos(i.texcoord + float2(0.0,  texel.y), pixTZ);
             float3 botPos    = ReconstructViewPos(i.texcoord + float2(0.0, -texel.y), pixBZ);
 
-            // Edge-preserving normal reconstruction: pick the closer neighbor on each axis to avoid depth discontinuities at silhouettes
-            float3 dx = (abs(pixRZ - pixCZ) < abs(pixLZ - pixCZ)) ? (rightPos - centerPos) : (centerPos - leftPos);
-            float3 dy = (abs(pixTZ - pixCZ) < abs(pixBZ - pixCZ)) ? (topPos - centerPos)   : (centerPos - botPos);
+            float3 normal;
+            bool hasGBufferNormal = false;
 
-            float3 normal = cross(dy, dx);
-            float lenSq = dot(normal, normal);
-            if (lenSq > 0.00001)
+            // When Deferred shading is active, fetch true smooth hardware normal from GBuffer2 to eliminate polygon quad faceting
+            if (_IsDeferred > 0.5)
             {
-                normal = normalize(normal);
+                float4 gbufNorm = _CameraGBufferTexture2.Load(int3(i.vertex.xy, 0));
+                float3 worldNorm = gbufNorm.rgb * 2.0 - 1.0;
+                if (dot(worldNorm, worldNorm) > 0.2)
+                {
+                    float3 gViewNorm = mul((float3x3)_WorldToCameraMatrix, normalize(worldNorm));
+                    gViewNorm.z = -gViewNorm.z;
+                    normal = normalize(gViewNorm);
+                    hasGBufferNormal = true;
+                }
             }
-            else
+
+            if (!hasGBufferNormal)
             {
-                normal = float3(0.0, 0.0, -1.0);
+                // High-quality screen-space central-difference normal reconstruction
+                float3 ddx = rightPos - leftPos;
+                float3 ddy = topPos - botPos;
+                normal = cross(ddy, ddx);
+                float lenSq = dot(normal, normal);
+                normal = (lenSq > 0.00001) ? normalize(normal) : float3(0.0, 0.0, -1.0);
             }
 
             // Normal in reconstructed view-space should point towards camera (-Z)
@@ -87,12 +102,8 @@ Shader "Hidden/TUFX/ContactShadows"
             float3 rayDir = normalize(_LightDirView);
             float NdotL = dot(normal, rayDir);
 
-            // Smooth transition at terminator: surfaces facing the light receive contact shadows
-            float lightFacing = saturate(NdotL * 3.0);
-            if (lightFacing <= 0.001)
-            {
-                return float4(1.0, 1.0, 1.0, 1.0);
-            }
+            // Smooth transition at terminator: surfaces facing away from light smoothly fade out, zero pop
+            float lightFacing = smoothstep(-0.05, 0.25, NdotL);
 
             // Distance fadeout: smoothly fade between 150m and 500m
             float distFade = saturate((500.0 - linearDepth) / 350.0);
@@ -105,8 +116,8 @@ Shader "Hidden/TUFX/ContactShadows"
             float maxRayLength = max(_RayLength, linearDepth * 0.015);
             float thickness = max(_Thickness, linearDepth * 0.008);
 
-            // Normal bias lifts ray off surface to avoid self-shadowing acne
-            float normalBias = max(0.008, thickness * 0.12);
+            // Normal bias lifts ray off surface to avoid self-shadowing acne on curved surfaces
+            float normalBias = max(0.015, thickness * 0.20);
             float3 originPos = centerPos + normal * normalBias;
 
             // March towards light source in view space
@@ -159,7 +170,10 @@ Shader "Hidden/TUFX/ContactShadows"
                 float expectedDepth = 1.0 / lerp(invZ_start, invZ_end, t);
                 float depthDiff = expectedDepth - sampleLinearDepth;
 
-                if (depthDiff > bias && depthDiff < thickness)
+                // Dynamic curvature bias avoids false self-shadowing on curved surfaces
+                float dynamicBias = bias + t * max(0.008, thickness * 0.15);
+
+                if (depthDiff > dynamicBias && depthDiff < thickness)
                 {
                     // Solid occlusion across occluder body with smooth fadeout near the tail
                     float tail = (depthDiff - thickness * 0.7) / max(0.001, thickness * 0.3);
@@ -171,7 +185,8 @@ Shader "Hidden/TUFX/ContactShadows"
             }
 
             occlusion *= pixelWeight * distFade;
-            float shadow = 1.0 - saturate(occlusion * _Intensity * lightFacing);
+            // Smoothly modulate shadow with lightFacing to guarantee zero pop and seamless terminator transition
+            float shadow = lerp(1.0, 1.0 - saturate(occlusion * _Intensity), lightFacing);
 
             return float4(shadow, shadow, shadow, 1.0);
         }
